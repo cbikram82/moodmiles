@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MoodMiles requires access to your location to track your walks and runs in real-time, map your breadcrumb progress, and help you navigate loops.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>MoodMiles requires background location access to continuously track your route and progress even when the screen is dimmed or locked.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>MoodMiles requires continuous location tracking to trace your walked path during journeys without interruption.</string>
 </dict>
 </plist>
