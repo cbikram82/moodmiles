@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: "com.moodmiles.app://callback",
+            redirectTo: `${window.location.origin}/auth/callback`,
             skipBrowserRedirect: true,
           },
         });
