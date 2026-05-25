@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, supabaseConfigured } from "./supabase";
 
 export interface JourneyRecord {
   id: string;
@@ -22,6 +22,8 @@ export async function saveJourney(journey: {
   distanceKm: number;
   breadcrumbs: { lat: number; lng: number }[];
 }): Promise<string | null> {
+  if (!supabaseConfigured) return null;
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -53,6 +55,8 @@ export async function updateJourneyFeeling(
   journeyId: string,
   feeling: string
 ): Promise<void> {
+  if (!supabaseConfigured) return;
+
   const { error } = await supabase
     .from("journeys")
     .update({ post_feeling: feeling })
@@ -64,6 +68,8 @@ export async function updateJourneyFeeling(
 }
 
 export async function getJourneyHistory(): Promise<JourneyRecord[]> {
+  if (!supabaseConfigured) return [];
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

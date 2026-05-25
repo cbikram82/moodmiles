@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+import { supabase, supabaseConfigured } from "./supabase";
 
 interface AuthContextValue {
   user: User | null;
@@ -28,9 +28,11 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(supabaseConfigured);
 
   useEffect(() => {
+    if (!supabaseConfigured) return;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
@@ -47,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
+    if (!supabaseConfigured) return;
+
     const redirectTo =
       typeof window !== "undefined"
         ? window.location.origin
@@ -59,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!supabaseConfigured) return;
     await supabase.auth.signOut();
     setUser(null);
   };
