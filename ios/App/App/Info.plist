@@ -54,7 +54,7 @@
 			<string>com.moodmiles.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.moodmiles.app</string>
+				<string>moodmiles</string>
 			</array>
 		</dict>
 	</array>

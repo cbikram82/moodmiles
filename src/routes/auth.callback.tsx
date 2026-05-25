@@ -43,7 +43,7 @@ function AuthCallbackPage() {
       // We're in Safari — redirect to the app via custom URL scheme.
       // The app's deep-link handler will exchange the code.
       setStatus("redirecting");
-      window.location.href = `com.moodmiles.app://callback?code=${code}`;
+      window.location.href = `moodmiles://callback?code=${code}`;
 
       const timer = setTimeout(() => setStatus("fallback"), 2500);
       return () => clearTimeout(timer);
@@ -78,7 +78,7 @@ function AuthCallbackPage() {
               Tap below to return to the app.
             </p>
             <a
-              href={`com.moodmiles.app://callback?code=${code}`}
+              href={`moodmiles://callback?code=${code}`}
               className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90"
             >
               Open MoodMiles
