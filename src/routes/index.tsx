@@ -65,6 +65,7 @@ const ROUTES: Record<Mood, {
   environment: string;
   soundtrack: string;
   prompt: string;
+  musicQuery: string;
 }> = {
   Calm: {
     title: "Quiet Reset Loop",
@@ -74,6 +75,7 @@ const ROUTES: Record<Mood, {
     environment: "Tree-lined streets, parks, low traffic roads",
     soundtrack: "Soft piano, ambient electronic, mellow acoustic",
     prompt: "What thought are you ready to leave behind on this walk?",
+    musicQuery: "Soft piano ambient mellow acoustic walking",
   },
   "Clear Mind": {
     title: "Open Sky Stretch",
@@ -83,6 +85,7 @@ const ROUTES: Record<Mood, {
     environment: "Wide promenades, riverside paths, open horizons",
     soundtrack: "Lo-fi beats, minimal ambient, light instrumental",
     prompt: "What question keeps circling back to you lately?",
+    musicQuery: "Lofi chill minimal focus instrumental beats",
   },
   "Energy Boost": {
     title: "Sunrise Pulse Route",
@@ -92,6 +95,7 @@ const ROUTES: Record<Mood, {
     environment: "City blocks, bright avenues, gentle hills",
     soundtrack: "Upbeat indie, funky electronic, modern pop",
     prompt: "What's one thing you're ready to bring fresh energy to today?",
+    musicQuery: "Upbeat energetic indie electronic running",
   },
   Reflective: {
     title: "Slow Lantern Path",
@@ -101,6 +105,7 @@ const ROUTES: Record<Mood, {
     environment: "Old neighborhoods, lit alleys, garden paths",
     soundtrack: "Piano sketches, neoclassical, ambient warmth",
     prompt: "What moment from the past month deserves a second look?",
+    musicQuery: "Neoclassical piano warm ambient reflection",
   },
   Escape: {
     title: "Off-Map Wander",
@@ -110,6 +115,7 @@ const ROUTES: Record<Mood, {
     environment: "New neighborhoods, hidden side streets, unfamiliar corners",
     soundtrack: "World instrumentals, cinematic ambient, dreamy synths",
     prompt: "If today wasn't yours yet, what would you do with the next hour?",
+    musicQuery: "Dreamy synths cinematic electronic wander",
   },
   Confidence: {
     title: "Tall Step Avenue",
@@ -119,6 +125,7 @@ const ROUTES: Record<Mood, {
     environment: "Wide avenues, plazas, well-lit boulevards",
     soundtrack: "Cinematic strings, modern soul, driving electronic",
     prompt: "What would you do today if you fully trusted yourself?",
+    musicQuery: "Driving modern soul upbeat confidence walk",
   },
   Recovery: {
     title: "Soft Green Loop",
@@ -128,6 +135,7 @@ const ROUTES: Record<Mood, {
     environment: "Flat parks, garden paths, shaded sidewalks",
     soundtrack: "Nature sounds, warm ambient, slow acoustic",
     prompt: "What does your body need you to hear right now?",
+    musicQuery: "Healing nature sounds warm ambient restore",
   },
   "Creative Spark": {
     title: "Bright Detour Route",
@@ -137,8 +145,42 @@ const ROUTES: Record<Mood, {
     environment: "Murals, markets, mixed neighborhoods, color-rich streets",
     soundtrack: "Jazz fusion, playful electronic, indie psych",
     prompt: "What half-formed idea wants a little more room today?",
+    musicQuery: "Jazz fusion playful electronic creative flow",
   },
 };
+
+function getMusicLaunchUrl(provider: string, query: string): string {
+  const encQuery = encodeURIComponent(query);
+  switch (provider) {
+    case "apple":
+      return `https://music.apple.com/search?term=${encQuery}`;
+    case "ytmusic":
+      return `https://music.youtube.com/search?q=${encQuery}`;
+    case "youtube":
+      return `https://www.youtube.com/results?search_query=${encodeURIComponent(query + " playlist")}`;
+    case "tidal":
+      return `https://listen.tidal.com/search/playlists?q=${encQuery}`;
+    case "spotify":
+    default:
+      return `https://open.spotify.com/search/${encQuery}`;
+  }
+}
+
+function getMusicProviderLabel(provider: string): string {
+  switch (provider) {
+    case "apple":
+      return "Apple Music";
+    case "ytmusic":
+      return "YouTube Music";
+    case "youtube":
+      return "YouTube";
+    case "tidal":
+      return "Tidal";
+    case "spotify":
+    default:
+      return "Spotify";
+  }
+}
 
 function calculateDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8; // Earth radius in miles
@@ -179,6 +221,12 @@ function MoodMiles() {
       return (localStorage.getItem("moodmiles_running_speed") as "jog" | "fast" | "sprint") || "fast";
     }
     return "fast";
+  });
+  const [musicProvider, setMusicProvider] = useState<"spotify" | "apple" | "ytmusic" | "youtube" | "tidal">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("moodmiles_music_provider") as any) || "spotify";
+    }
+    return "spotify";
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -286,6 +334,7 @@ function MoodMiles() {
               locationName={locationName}
               setLocationName={setLocationName}
               deviceLocation={deviceLocation}
+              musicProvider={musicProvider}
               onOpenSettings={() => setSettingsOpen(true)}
               onStart={() => setStep("active")}
             />
@@ -305,6 +354,7 @@ function MoodMiles() {
               setUsingCustomLocation={setUsingCustomLocation}
               locationName={locationName}
               setLocationName={setLocationName}
+              musicProvider={musicProvider}
               onComplete={() => setStep("post")}
             />
           )}
@@ -431,6 +481,35 @@ function MoodMiles() {
                       >
                         <span className="text-xs font-semibold capitalize">{spd}</span>
                         <span className="text-[10px] opacity-80">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Music Provider Preference */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Preferred Music Service
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["spotify", "apple", "ytmusic", "youtube", "tidal"] as const).map((prov) => {
+                    const label = getMusicProviderLabel(prov);
+                    const active = musicProvider === prov;
+                    return (
+                      <button
+                        key={prov}
+                        onClick={() => {
+                          setMusicProvider(prov);
+                          localStorage.setItem("moodmiles_music_provider", prov);
+                        }}
+                        className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                          active
+                            ? "border-primary/60 bg-gradient-to-br from-accent/15 to-primary/15 text-foreground"
+                            : "border-border/60 bg-background/30 text-muted-foreground hover:text-foreground"
+                        } ${prov === "tidal" ? "col-span-2" : "col-span-1"}`}
+                      >
+                        <span className="text-xs font-semibold">{label}</span>
                       </button>
                     );
                   })}
@@ -701,6 +780,7 @@ function RouteScreen({
   locationName,
   setLocationName,
   deviceLocation,
+  musicProvider,
   onOpenSettings,
   onStart,
 }: {
@@ -718,6 +798,7 @@ function RouteScreen({
   locationName: string;
   setLocationName: (name: string) => void;
   deviceLocation: { lat: number; lng: number } | null;
+  musicProvider: "spotify" | "apple" | "ytmusic" | "youtube" | "tidal";
   onOpenSettings: () => void;
   onStart: () => void;
 }) {
@@ -785,7 +866,20 @@ function RouteScreen({
       <div className="space-y-2">
         <DetailRow icon={Gauge} label="Pace" value={route.pace} />
         <DetailRow icon={TreePine} label="Environment" value={route.environment} />
-        <DetailRow icon={Music} label="Soundtrack" value={route.soundtrack} />
+        <DetailRow
+          icon={Music}
+          label="Soundtrack"
+          value={route.soundtrack}
+          action={
+            <button
+              onClick={() => window.open(getMusicLaunchUrl(musicProvider, route.musicQuery), "_blank")}
+              className="rounded-lg bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+            >
+              <Music className="h-3.5 w-3.5 animate-pulse" />
+              Open {getMusicProviderLabel(musicProvider)}
+            </button>
+          }
+        />
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/50 p-5 backdrop-blur">
@@ -823,22 +917,27 @@ function DetailRow({
   icon: Icon,
   label,
   value,
+  action,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur">
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          {label}
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur w-full">
+      <div className="flex items-start gap-3 min-w-0">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30">
+          <Icon className="h-4 w-4" />
         </div>
-        <div className="mt-0.5 text-sm text-foreground/90">{value}</div>
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            {label}
+          </div>
+          <div className="mt-0.5 text-sm text-foreground/90 truncate">{value}</div>
+        </div>
       </div>
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -940,6 +1039,7 @@ interface ActiveScreenProps {
   setUsingCustomLocation: (val: boolean) => void;
   locationName: string;
   setLocationName: (name: string) => void;
+  musicProvider: "spotify" | "apple" | "ytmusic" | "youtube" | "tidal";
 }
 
 function ActiveScreen({
@@ -957,6 +1057,7 @@ function ActiveScreen({
   setUsingCustomLocation,
   locationName,
   setLocationName,
+  musicProvider,
 }: ActiveScreenProps) {
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -1053,8 +1154,17 @@ function ActiveScreen({
         </div>
         
         <div className="space-y-2">
-          <div className="text-[11px] leading-relaxed text-muted-foreground">
-            <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span> {route.soundtrack}
+          <div className="flex items-center justify-between text-[11px] leading-relaxed text-muted-foreground gap-2">
+            <div>
+              <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span> {route.soundtrack}
+            </div>
+            <button
+              onClick={() => window.open(getMusicLaunchUrl(musicProvider, route.musicQuery), "_blank")}
+              className="rounded-lg bg-accent/20 hover:bg-accent/30 text-accent px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+            >
+              <Music className="h-3 w-3 animate-pulse" />
+              Open {getMusicProviderLabel(musicProvider)}
+            </button>
           </div>
           <p className="text-sm italic leading-relaxed text-foreground/95 bg-background/35 p-3 rounded-xl border border-border/40">
             "{route.prompt}"
