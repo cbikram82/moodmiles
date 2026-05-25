@@ -31,11 +31,18 @@ import {
   LogOut,
   Check,
   Loader2,
+  History,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodMap } from "@/components/MoodMap";
 import { useAuth } from "@/lib/auth";
-import { saveJourney, updateJourneyFeeling } from "@/lib/journeys";
+import {
+  saveJourney,
+  updateJourneyFeeling,
+  getJourneyHistory,
+  type JourneyRecord,
+} from "@/lib/journeys";
 import logoUrl from "../logo.png";
 
 export const Route = createFileRoute("/")({
@@ -687,6 +694,43 @@ function Landing({
   authLoading: boolean;
   onSignIn: () => Promise<void>;
 }) {
+  const [journeys, setJourneys] = useState<JourneyRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setJourneys([]);
+      return;
+    }
+    setLoadingHistory(true);
+    getJourneyHistory().then((data) => {
+      setJourneys(data);
+      setLoadingHistory(false);
+    });
+  }, [user]);
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatDuration = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${mins}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const feelingColor = (f: string | null) => {
+    if (f === "Better") return "text-emerald-400";
+    if (f === "Same") return "text-amber-400";
+    if (f === "Worse") return "text-red-400";
+    return "text-muted-foreground";
+  };
+
   return (
     <section className="flex h-full flex-col items-center justify-between pt-10 text-center">
       <div className="space-y-8">
@@ -743,6 +787,81 @@ function Landing({
           </p>
         )}
       </div>
+
+      {/* Journey History */}
+      {user && (
+        <div className="mt-8 w-full space-y-3 text-left">
+          <div className="flex items-center gap-2 px-1">
+            <History className="h-4 w-4 text-accent" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              My Journeys
+            </span>
+            {journeys.length > 0 && (
+              <span className="ml-auto text-[10px] text-muted-foreground/60">
+                {journeys.length} total
+              </span>
+            )}
+          </div>
+
+          {loadingHistory && (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {!loadingHistory && journeys.length === 0 && (
+            <div className="rounded-2xl border border-border/60 bg-card/40 p-5 backdrop-blur text-center">
+              <p className="text-xs text-muted-foreground">
+                No journeys yet. Complete your first walk to see it here.
+              </p>
+            </div>
+          )}
+
+          {!loadingHistory && journeys.length > 0 && (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {journeys.map((j) => (
+                <div
+                  key={j.id}
+                  className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {j.route_title}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(j.completed_at)}
+                      </div>
+                    </div>
+                    {j.post_feeling && (
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wider shrink-0 ${feelingColor(j.post_feeling)}`}
+                      >
+                        {j.post_feeling}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
+                      {j.mood}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatDuration(j.elapsed_seconds)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {Number(j.distance_km).toFixed(2)} km
+                    </span>
+                    <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
+                      {j.activity}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
