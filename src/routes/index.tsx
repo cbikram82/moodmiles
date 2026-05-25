@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodMap } from "@/components/MoodMap";
+import logoUrl from "../logo.png";
 
 export const Route = createFileRoute("/")({
   component: MoodMiles,
@@ -562,9 +563,7 @@ function Header({
         <ArrowLeft className="h-4 w-4" />
       </button>
       <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary">
-          <Footprints className="h-3.5 w-3.5 text-background" />
-        </div>
+        <img src={logoUrl} alt="MoodMiles Logo" className="h-7 w-7 object-contain rounded-full border border-border/40" />
         <span className="text-sm font-medium tracking-wide">MoodMiles</span>
       </div>
       <div className="flex items-center gap-2">
@@ -593,8 +592,8 @@ function Landing({ onStart }: { onStart: () => void }) {
       <div className="space-y-8">
         <div className="relative mx-auto h-44 w-44">
           <div className="absolute inset-0 animate-pulse rounded-full bg-gradient-to-br from-accent/40 via-primary/30 to-chart-3/30 blur-2xl" />
-          <div className="relative flex h-full w-full items-center justify-center rounded-full border border-border/40 bg-card/40 backdrop-blur-xl">
-            <Sparkles className="h-12 w-12 text-foreground/90" />
+          <div className="relative flex h-full w-full items-center justify-center rounded-full border border-border/40 bg-card/50 overflow-hidden backdrop-blur-xl">
+            <img src={logoUrl} alt="MoodMiles Logo" className="h-32 w-32 object-contain" />
           </div>
         </div>
 
