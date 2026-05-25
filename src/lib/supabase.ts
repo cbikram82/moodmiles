@@ -10,5 +10,10 @@ if (!supabaseConfigured) {
 }
 
 export const supabase: SupabaseClient = supabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: "pkce",
+        detectSessionInUrl: false,
+      },
+    })
   : (null as unknown as SupabaseClient);

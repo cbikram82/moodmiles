@@ -42,6 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseConfigured) return;
 
+    // On web: check if we landed back with a ?code= param (PKCE callback)
+    if (!checkIsNative()) {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code) {
+        supabase.auth.exchangeCodeForSession(code).then(() => {
+          window.history.replaceState({}, "", window.location.pathname);
+        });
+      }
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
