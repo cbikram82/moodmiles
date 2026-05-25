@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Settings,
   X,
+  Navigation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodMap } from "@/components/MoodMap";
@@ -139,6 +140,20 @@ const ROUTES: Record<Mood, {
   },
 };
 
+function calculateDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 function MoodMiles() {
   const [step, setStep] = useState<Step>("landing");
   const [mood, setMood] = useState<Mood | null>(null);
@@ -171,6 +186,31 @@ function MoodMiles() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
   const [locationName, setLocationName] = useState<string>("Detecting location...");
+  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Background fetch to track actual physical device GPS coords for "far away starting point navigation"
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setDeviceLocation(coords);
+        
+        // Populate standard userLocation initially if not using custom dropped pin
+        if (!usingCustomLocation && !userLocation) {
+          setUserLocation(coords);
+          setLocationName("Your Location");
+        }
+      },
+      (err) => {
+        console.warn("Background device location retrieval failed: ", err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [usingCustomLocation, userLocation]);
 
   const route = useMemo(() => (mood ? ROUTES[mood] : null), [mood]);
 
@@ -245,6 +285,7 @@ function MoodMiles() {
               setUsingCustomLocation={setUsingCustomLocation}
               locationName={locationName}
               setLocationName={setLocationName}
+              deviceLocation={deviceLocation}
               onOpenSettings={() => setSettingsOpen(true)}
               onStart={() => setStep("active")}
             />
@@ -659,6 +700,7 @@ function RouteScreen({
   setUsingCustomLocation,
   locationName,
   setLocationName,
+  deviceLocation,
   onOpenSettings,
   onStart,
 }: {
@@ -675,9 +717,34 @@ function RouteScreen({
   setUsingCustomLocation: (val: boolean) => void;
   locationName: string;
   setLocationName: (name: string) => void;
+  deviceLocation: { lat: number; lng: number } | null;
   onOpenSettings: () => void;
   onStart: () => void;
 }) {
+  const distanceToStartMiles = useMemo(() => {
+    if (!deviceLocation || !userLocation) return 0;
+    return calculateDistanceMiles(
+      deviceLocation.lat,
+      deviceLocation.lng,
+      userLocation.lat,
+      userLocation.lng
+    );
+  }, [deviceLocation, userLocation]);
+
+  const isFarAway = useMemo(() => {
+    if (!deviceLocation || !userLocation || !usingCustomLocation) return false;
+    return distanceToStartMiles > 1.0;
+  }, [deviceLocation, userLocation, usingCustomLocation, distanceToStartMiles]);
+
+  const handleNavigateToStart = () => {
+    if (!userLocation) return;
+    const isApple = typeof navigator !== "undefined" && /Mac|iPad|iPhone|iPod/.test(navigator.userAgent);
+    const url = isApple
+      ? `https://maps.apple.com/?daddr=${userLocation.lat},${userLocation.lng}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${userLocation.lat},${userLocation.lng}`;
+    window.open(url, "_blank");
+  };
+
   return (
     <section className="space-y-5">
       <div className="space-y-2">
@@ -728,6 +795,16 @@ function RouteScreen({
           "{route.prompt}"
         </p>
       </div>
+
+      {isFarAway && (
+        <Button
+          onClick={handleNavigateToStart}
+          className="h-14 w-full rounded-2xl border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent font-medium transition flex items-center justify-center gap-2 shadow-sm shadow-accent/5 animate-in fade-in slide-in-from-bottom-2 duration-300 cursor-pointer"
+        >
+          <Navigation className="h-4 w-4 fill-accent animate-pulse" />
+          Navigate to Start Point ({distanceToStartMiles.toFixed(1)} miles away)
+        </Button>
+      )}
 
       <Button
         onClick={onStart}
