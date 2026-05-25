@@ -1,41 +1,73 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { supabase, supabaseConfigured } from "../lib/supabase";
 
 export const Route = createFileRoute("/auth/callback")({
   component: AuthCallbackPage,
 });
 
 function AuthCallbackPage() {
-  const [status, setStatus] = useState<"redirecting" | "fallback">("redirecting");
+  const [status, setStatus] = useState<
+    "processing" | "redirecting" | "fallback" | "error"
+  >("processing");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
-    if (code) {
+    if (!code) {
+      setStatus("error");
+      return;
+    }
+
+    let isNative = false;
+    try {
+      isNative = Capacitor.isNativePlatform();
+    } catch {
+      // not in Capacitor context
+    }
+
+    if (isNative && supabaseConfigured) {
+      // We're inside the Capacitor webview — exchange the code here
+      // (the PKCE verifier is in this webview's localStorage)
+      supabase.auth
+        .exchangeCodeForSession(code)
+        .then(() => {
+          window.location.href = "/";
+        })
+        .catch(() => {
+          setStatus("error");
+        });
+    } else {
+      // We're in Safari — redirect to the app via custom URL scheme.
+      // The app's deep-link handler will exchange the code.
+      setStatus("redirecting");
       window.location.href = `com.moodmiles.app://callback?code=${code}`;
 
-      // If the redirect didn't work after 2s, show fallback button
-      const timer = setTimeout(() => setStatus("fallback"), 2000);
+      const timer = setTimeout(() => setStatus("fallback"), 2500);
       return () => clearTimeout(timer);
-    } else {
-      setStatus("fallback");
     }
   }, []);
 
-  const params = new URLSearchParams(
-    typeof window !== "undefined" ? window.location.search : "",
-  );
-  const code = params.get("code");
+  const code = (() => {
+    try {
+      return new URLSearchParams(window.location.search).get("code");
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
       <div className="max-w-sm text-center">
-        {status === "redirecting" && (
+        {(status === "processing" || status === "redirecting") && (
           <>
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="text-sm text-muted-foreground">
-              Redirecting to MoodMiles...
+              {status === "processing"
+                ? "Signing you in..."
+                : "Redirecting to MoodMiles..."}
             </p>
           </>
         )}
@@ -54,7 +86,7 @@ function AuthCallbackPage() {
           </>
         )}
 
-        {status === "fallback" && !code && (
+        {status === "error" && (
           <p className="text-sm text-muted-foreground">
             Something went wrong. Please try signing in again.
           </p>

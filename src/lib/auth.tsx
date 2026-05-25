@@ -107,45 +107,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    if (!supabaseConfigured) {
-      console.error("Supabase not configured");
+    if (!supabaseConfigured) return;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error || !data.url) {
+      console.error("OAuth error:", error?.message);
       return;
     }
 
-    const native = checkIsNative();
-
-    try {
-      if (native) {
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-            skipBrowserRedirect: true,
-          },
-        });
-
-        if (error || !data.url) {
-          console.error("OAuth error:", error?.message);
-          return;
-        }
-
-        try {
-          const { Browser } = await import("@capacitor/browser");
-          await Browser.open({ url: data.url });
-        } catch {
-          window.open(data.url, "_blank");
-        }
-      } else {
-        await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: window.location.origin,
-          },
-        });
-      }
-    } catch (e) {
-      console.error("Sign-in failed:", e);
-    }
+    // Navigate the current page. In the Capacitor webview this either
+    // stays in-webview (if allowNavigation covers the domain) or
+    // Capacitor opens it in Safari. Both paths are handled by the
+    // /auth/callback page on return.
+    window.location.href = data.url;
   };
 
   const signOut = async () => {
