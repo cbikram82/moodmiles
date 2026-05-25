@@ -701,8 +701,8 @@ function RouteScreen({
         mapTheme={mapTheme}
         walkingSpeed={walkingSpeed}
         runningSpeed={runningSpeed}
-        userLocation={userLocation}
-        setUserLocation={setUserLocation}
+        routeCenter={userLocation}
+        setRouteCenter={setUserLocation}
         usingCustomLocation={usingCustomLocation}
         setUsingCustomLocation={setUsingCustomLocation}
         locationName={locationName}
@@ -931,8 +931,8 @@ function ActiveScreen({
         runningSpeed={runningSpeed}
         liveTracking={true}
         onDistanceChange={setLiveDistance}
-        userLocation={userLocation}
-        setUserLocation={setUserLocation}
+        routeCenter={userLocation}
+        setRouteCenter={setUserLocation}
         usingCustomLocation={usingCustomLocation}
         setUsingCustomLocation={setUsingCustomLocation}
         locationName={locationName}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MapPin, Compass } from "lucide-react";
+import { Loader2, Compass } from "lucide-react";
 
 type Mood =
   | "Calm"
@@ -14,6 +14,11 @@ type Mood =
 type Duration = 15 | 30 | 45 | 60;
 type Activity = "Walk" | "Run";
 
+interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 interface MoodMapProps {
   mood: Mood;
   duration: Duration;
@@ -23,11 +28,12 @@ interface MoodMapProps {
   runningSpeed: "jog" | "fast" | "sprint";
   liveTracking?: boolean;
   onDistanceChange?: (distKm: number) => void;
-}
-
-interface LatLng {
-  lat: number;
-  lng: number;
+  routeCenter: LatLng | null;
+  setRouteCenter: (coords: LatLng | null) => void;
+  usingCustomLocation: boolean;
+  setUsingCustomLocation: (val: boolean) => void;
+  locationName: string;
+  setLocationName: (name: string) => void;
 }
 
 // Default backup coordinates (London Hyde Park area)
@@ -57,23 +63,29 @@ export function MoodMap({
   runningSpeed,
   liveTracking = false,
   onDistanceChange,
+  routeCenter,
+  setRouteCenter,
+  usingCustomLocation,
+  setUsingCustomLocation,
+  locationName,
+  setLocationName,
 }: MoodMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
-  // References for live rendering layers to avoid complete maps rebuild on coordinate ticks
+  // Rock-solid layer references for Leaflet to ensure strict cleanups
+  const polylineRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
   const liveMarkerRef = useRef<any>(null);
   const liveBreadcrumbsPolylineRef = useRef<any>(null);
 
   const [L, setL] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [locationName, setLocationName] = useState<string>("Detecting location...");
   const [routingDistance, setRoutingDistance] = useState<number>(0);
-  const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
 
-  // Real-time breadcrumbs tracking
+  // Real-time user GPS tracking state (independent of static routeCenter)
+  const [liveLocation, setLiveLocation] = useState<LatLng | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<LatLng[]>([]);
   const [cumulativeDistance, setCumulativeDistance] = useState<number>(0);
 
@@ -123,13 +135,13 @@ export function MoodMap({
     });
   }, []);
 
-  // 2. Geolocation Tracker: watchPosition if liveTracking, else getCurrentPosition
+  // 2. Geolocation Tracker: watchPosition if liveTracking, else getCurrentPosition (only if no routeCenter exists)
   useEffect(() => {
     let watchId: number | null = null;
 
     if (!navigator.geolocation) {
-      if (!usingCustomLocation) {
-        setUserLocation(DEFAULT_COORDS);
+      if (!usingCustomLocation && !routeCenter) {
+        setRouteCenter(DEFAULT_COORDS);
         setLocationName("London, UK (Default)");
         setLoading(false);
       }
@@ -137,7 +149,7 @@ export function MoodMap({
     }
 
     if (liveTracking) {
-      // 2A. Active watch tracking
+      // 2A. Active watch tracking - updates liveLocation, NEVER overrides routeCenter!
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           const newPos = {
@@ -145,8 +157,7 @@ export function MoodMap({
             lng: position.coords.longitude,
           };
 
-          setUserLocation(newPos);
-          setLocationName("Tracking Live Location");
+          setLiveLocation(newPos);
           setLoading(false);
 
           // Update breadcrumbs and haversine calculations
@@ -176,11 +187,12 @@ export function MoodMap({
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-    } else if (!usingCustomLocation) {
-      // 2B. Single shot planning retrieval
+    } else if (!usingCustomLocation && !routeCenter) {
+      // 2B. Single shot planning retrieval - ONLY if no custom location is currently set
+      setLoading(true);
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          setRouteCenter({
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
@@ -189,12 +201,15 @@ export function MoodMap({
         },
         (err) => {
           console.warn("Geolocation query failed, using default: ", err.message);
-          setUserLocation(DEFAULT_COORDS);
+          setRouteCenter(DEFAULT_COORDS);
           setLocationName("London, UK (Default)");
           setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
+    } else {
+      // Already has a planned route center
+      setLoading(false);
     }
 
     return () => {
@@ -202,7 +217,7 @@ export function MoodMap({
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [liveTracking, onDistanceChange, usingCustomLocation]);
+  }, [liveTracking, onDistanceChange, usingCustomLocation, routeCenter]);
 
   // 3. Algorithmic spatial loop generator
   const getLoopWaypoints = (start: LatLng): LatLng[] => {
@@ -240,16 +255,17 @@ export function MoodMap({
   const handleResetToGPS = () => {
     setLoading(true);
     setUsingCustomLocation(false);
+    setRouteCenter(null); // Triggers GPS retrieval effect
   };
 
   // 4. Initialize Map (Leaflet) & Draw planned route + Breadcrumbs
   useEffect(() => {
-    if (!L || loading || !userLocation || mapTheme !== "real" || !mapContainerRef.current) return;
+    if (!L || loading || !routeCenter || mapTheme !== "real" || !mapContainerRef.current) return;
 
     // A. Recreate map base if it doesn't exist
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
-        center: [userLocation.lat, userLocation.lng],
+        center: [routeCenter.lat, routeCenter.lng],
         zoom: 16,
         zoomControl: false,
         attributionControl: false,
@@ -263,12 +279,12 @@ export function MoodMap({
       // Add map click listener to drop pins in planning mode
       if (!liveTracking) {
         map.on("click", (e: any) => {
-          setUserLocation({
+          setUsingCustomLocation(true);
+          setLocationName("Custom Location");
+          setRouteCenter({
             lat: e.latlng.lat,
             lng: e.latlng.lng,
           });
-          setLocationName("Custom Location");
-          setUsingCustomLocation(true);
         });
       }
 
@@ -343,18 +359,17 @@ export function MoodMap({
 
     const map = mapInstanceRef.current;
     
-    // Clear all existing markers/polylines from map before redrawing (since start coordinates shifted)
-    map.eachLayer((layer: any) => {
-      if (!!layer.toGeoJSON) { // Clear shapes
-        map.removeLayer(layer);
-      } else if (layer instanceof L.Marker) { // Clear markers
-        map.removeLayer(layer);
-      }
-    });
+    // Clear all previously drawn markers and polylines cleanly
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
 
-    // Calculate coordinates loop
-    const waypoints = getLoopWaypoints(userLocation);
-    const fullCoordinates = [userLocation, ...waypoints, userLocation];
+    // Calculate coordinates loop around routeCenter
+    const waypoints = getLoopWaypoints(routeCenter);
+    const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
     const coordinatesString = fullCoordinates
       .map((coord) => `${coord.lng},${coord.lat}`)
       .join(";");
@@ -372,7 +387,8 @@ export function MoodMap({
       iconSize: [24, 24],
       iconAnchor: [12, 12],
     });
-    L.marker([userLocation.lat, userLocation.lng], { icon: startIcon }).addTo(map);
+    const startMarker = L.marker([routeCenter.lat, routeCenter.lng], { icon: startIcon }).addTo(map);
+    markersRef.current.push(startMarker);
 
     // Waypoint Dots Custom Pin
     const wpIcon = L.divIcon({
@@ -403,9 +419,11 @@ export function MoodMap({
             opacity: 0.85,
             lineJoin: "round",
           }).addTo(map);
+          polylineRef.current = polyline;
 
           waypoints.forEach((wp) => {
-            L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+            const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+            markersRef.current.push(wpMarker);
           });
 
           // Focus planned bounds initially or pan to center if location updated
@@ -425,9 +443,11 @@ export function MoodMap({
           opacity: 0.8,
           dashArray: "6, 8",
         }).addTo(map);
+        polylineRef.current = polyline;
 
         waypoints.forEach((wp) => {
-          L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+          const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+          markersRef.current.push(wpMarker);
         });
 
         if (!liveTracking) {
@@ -437,7 +457,7 @@ export function MoodMap({
       });
 
     // B. LIVE ROUTE & GPS RENDERING (React state ticks)
-    if (liveTracking) {
+    if (liveTracking && liveLocation) {
       const liveIcon = L.divIcon({
         className: "custom-live-marker",
         html: `
@@ -451,9 +471,9 @@ export function MoodMap({
       });
 
       if (!liveMarkerRef.current) {
-        liveMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: liveIcon }).addTo(map);
+        liveMarkerRef.current = L.marker([liveLocation.lat, liveLocation.lng], { icon: liveIcon }).addTo(map);
       } else {
-        liveMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+        liveMarkerRef.current.setLatLng([liveLocation.lat, liveLocation.lng]);
       }
 
       if (breadcrumbs.length > 1) {
@@ -471,9 +491,10 @@ export function MoodMap({
         }
       }
 
-      map.panTo([userLocation.lat, userLocation.lng], { animate: true });
+      // Pan to the user's active GPS coordinate to keep them centered
+      map.panTo([liveLocation.lat, liveLocation.lng], { animate: true });
     }
-  }, [L, loading, userLocation, mapTheme, breadcrumbs, liveTracking]);
+  }, [L, loading, routeCenter, mapTheme, breadcrumbs, liveTracking, liveLocation]);
 
   // Cleanup map container fully on unmount
   useEffect(() => {
@@ -487,7 +508,7 @@ export function MoodMap({
 
   // 5. Procedural Cyberpunk/Glow Canvas Map Render with live walk simulation
   useEffect(() => {
-    if (loading || mapTheme !== "cyberpunk" || !canvasRef.current || !userLocation) return;
+    if (loading || mapTheme !== "cyberpunk" || !canvasRef.current || !routeCenter) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -495,7 +516,7 @@ export function MoodMap({
 
     let animationFrameId: number;
     let width = (canvas.width = canvasRef.current.parentElement?.clientWidth || 400);
-    let height = (canvas.height = 240); // Height matching h-60 size (240px)
+    let height = (canvas.height = 240);
 
     const speedKmh = getSpeedKmh();
     const calculatedDist = speedKmh * (duration / 60);
@@ -515,7 +536,7 @@ export function MoodMap({
       const pts = [];
       const distFactor = duration / 15;
       const maxW = Math.min(width / 3.2, 100) * (0.6 + distFactor * 0.1);
-      const maxH = 65 * (0.6 + distFactor * 0.15); // scaled up for taller canvas
+      const maxH = 65 * (0.6 + distFactor * 0.15);
 
       if (mood === "Clear Mind") {
         pts.push({ x: startPoint.x + maxW * 0.2, y: startPoint.y - maxH * 1.8 });
@@ -685,7 +706,7 @@ export function MoodMap({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
     };
-  }, [loading, mapTheme, mood, duration, activity, userLocation, walkingSpeed, runningSpeed, liveTracking]);
+  }, [loading, mapTheme, mood, duration, activity, routeCenter, walkingSpeed, runningSpeed, liveTracking]);
 
   if (loading) {
     return (
