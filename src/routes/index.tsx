@@ -27,9 +27,15 @@ import {
   MapPin,
   TrendingUp,
   Trophy,
+  LogIn,
+  LogOut,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodMap } from "@/components/MoodMap";
+import { useAuth } from "@/lib/auth";
+import { saveJourney, updateJourneyFeeling } from "@/lib/journeys";
 import logoUrl from "../logo.png";
 
 export const Route = createFileRoute("/")({
@@ -208,12 +214,14 @@ function calculateDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: 
 }
 
 function MoodMiles() {
+  const { user, signInWithGoogle, signOut, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>("landing");
   const [mood, setMood] = useState<Mood | null>(null);
   const [duration, setDuration] = useState<Duration | null>(null);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [postFeel, setPostFeel] = useState<"Better" | "Same" | "Worse" | null>(null);
   const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
+  const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
 
   // User Preferences
   const [mapTheme, setMapTheme] = useState<"real" | "cyberpunk">(() => {
@@ -281,6 +289,7 @@ function MoodMiles() {
     setActivity(null);
     setPostFeel(null);
     setJourneyData(null);
+    setSavedJourneyId(null);
     setUserLocation(null);
     setUsingCustomLocation(false);
   };
@@ -300,10 +309,18 @@ function MoodMiles() {
           onBack={() => stepBack(step, setStep)}
           onReset={reset}
           onOpenSettings={() => setSettingsOpen(true)}
+          user={user}
         />
 
         <div className="mt-6 flex-1">
-          {step === "landing" && <Landing onStart={() => setStep("mood")} />}
+          {step === "landing" && (
+            <Landing
+              onStart={() => setStep("mood")}
+              user={user}
+              authLoading={authLoading}
+              onSignIn={signInWithGoogle}
+            />
+          )}
           {step === "mood" && (
             <MoodStep
               selected={mood}
@@ -381,6 +398,8 @@ function MoodMiles() {
               routeTitle={route.title}
               activity={activity!}
               duration={duration!}
+              user={user}
+              onJourneySaved={setSavedJourneyId}
               onContinue={() => setStep("post")}
             />
           )}
@@ -390,6 +409,7 @@ function MoodMiles() {
               feel={postFeel}
               onSelect={setPostFeel}
               onDone={reset}
+              savedJourneyId={savedJourneyId}
             />
           )}
         </div>
@@ -543,6 +563,42 @@ function MoodMiles() {
               </div>
             </div>
 
+            {/* Account Section */}
+            {user && (
+              <div className="mt-5 space-y-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Account
+                </span>
+                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/30 p-3">
+                  {user.user_metadata?.avatar_url && (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt=""
+                      className="h-8 w-8 rounded-full border border-border/40"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium truncate">
+                      {user.user_metadata?.full_name || user.email}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {user.email}
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await signOut();
+                      setSettingsOpen(false);
+                    }}
+                    className="rounded-lg border border-border/60 bg-background/40 px-3 py-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition flex items-center gap-1"
+                  >
+                    <LogOut className="h-3 w-3" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="mt-6">
               <Button
                 onClick={() => setSettingsOpen(false)}
@@ -569,11 +625,13 @@ function Header({
   onBack,
   onReset,
   onOpenSettings,
+  user,
 }: {
   step: Step;
   onBack: () => void;
   onReset: () => void;
   onOpenSettings: () => void;
+  user: import("@supabase/supabase-js").User | null;
 }) {
   const showBack = step !== "landing" && step !== "post" && step !== "recap";
   return (
@@ -592,6 +650,13 @@ function Header({
         <span className="text-sm font-medium tracking-wide">MoodMiles</span>
       </div>
       <div className="flex items-center gap-2">
+        {user?.user_metadata?.avatar_url && (
+          <img
+            src={user.user_metadata.avatar_url}
+            alt=""
+            className="h-8 w-8 rounded-full border-2 border-primary/40 shadow-sm"
+          />
+        )}
         <button
           onClick={onOpenSettings}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card/50 text-muted-foreground backdrop-blur transition hover:text-foreground"
@@ -611,7 +676,17 @@ function Header({
   );
 }
 
-function Landing({ onStart }: { onStart: () => void }) {
+function Landing({
+  onStart,
+  user,
+  authLoading,
+  onSignIn,
+}: {
+  onStart: () => void;
+  user: import("@supabase/supabase-js").User | null;
+  authLoading: boolean;
+  onSignIn: () => Promise<void>;
+}) {
   return (
     <section className="flex h-full flex-col items-center justify-between pt-10 text-center">
       <div className="space-y-8">
@@ -644,9 +719,29 @@ function Landing({ onStart }: { onStart: () => void }) {
           Begin
           <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">
-          Takes less than 30 seconds
-        </p>
+
+        {!user && !authLoading && (
+          <button
+            onClick={onSignIn}
+            className="mx-auto flex items-center gap-2 rounded-full border border-border/60 bg-card/50 px-4 py-2 text-xs text-muted-foreground backdrop-blur transition hover:text-foreground hover:border-border"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            Sign in with Google to save journeys
+          </button>
+        )}
+
+        {user && (
+          <p className="text-center text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+            <Check className="h-3 w-3 text-emerald-400" />
+            Signed in as {user.user_metadata?.full_name || user.email}
+          </p>
+        )}
+
+        {!user && authLoading && (
+          <p className="text-center text-[11px] text-muted-foreground">
+            Takes less than 30 seconds
+          </p>
+        )}
       </div>
     </section>
   );
@@ -979,12 +1074,20 @@ function PostScreen({
   feel,
   onSelect,
   onDone,
+  savedJourneyId,
 }: {
   mood: Mood;
   feel: "Better" | "Same" | "Worse" | null;
   onSelect: (f: "Better" | "Same" | "Worse") => void;
   onDone: () => void;
+  savedJourneyId: string | null;
 }) {
+  const handleSelect = (f: "Better" | "Same" | "Worse") => {
+    onSelect(f);
+    if (savedJourneyId) {
+      updateJourneyFeeling(savedJourneyId, f);
+    }
+  };
   const reflection = useMemo(() => {
     if (!feel) return null;
     if (feel === "Better")
@@ -1012,7 +1115,7 @@ function PostScreen({
           return (
             <button
               key={opt}
-              onClick={() => onSelect(opt)}
+              onClick={() => handleSelect(opt)}
               className={`rounded-2xl border px-3 py-5 text-sm font-medium transition ${
                 active
                   ? "border-primary/60 bg-gradient-to-br from-accent/25 to-primary/25"
@@ -1085,6 +1188,8 @@ function RecapScreen({
   routeTitle,
   activity,
   duration,
+  user,
+  onJourneySaved,
   onContinue,
 }: {
   journeyData: JourneyData;
@@ -1092,11 +1197,33 @@ function RecapScreen({
   routeTitle: string;
   activity: Activity;
   duration: Duration;
+  user: import("@supabase/supabase-js").User | null;
+  onJourneySaved: (id: string | null) => void;
   onContinue: () => void;
 }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setSaving(true);
+    saveJourney({
+      mood,
+      duration,
+      activity,
+      routeTitle,
+      elapsedSeconds: journeyData.seconds,
+      distanceKm: journeyData.distanceKm,
+      breadcrumbs: journeyData.breadcrumbs,
+    }).then((id) => {
+      onJourneySaved(id);
+      setSaved(!!id);
+      setSaving(false);
+    });
+  }, [user]);
 
   const animatedSeconds = useCountUp(journeyData.seconds, 1200, 300);
   const animatedDistance = useCountUp(journeyData.distanceKm, 1200, 500);
@@ -1299,8 +1426,24 @@ function RecapScreen({
         )}
       </div>
 
-      {/* Continue Button */}
-      <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both" style={{ animationDelay: "1000ms" }}>
+      {/* Save status + Continue Button */}
+      <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both space-y-3" style={{ animationDelay: "1000ms" }}>
+        {user && (
+          <div className="flex items-center justify-center gap-1.5 text-[11px]">
+            {saving && (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                <span className="text-muted-foreground">Saving journey...</span>
+              </>
+            )}
+            {saved && !saving && (
+              <>
+                <Check className="h-3 w-3 text-emerald-400" />
+                <span className="text-emerald-400/80">Journey saved to your history</span>
+              </>
+            )}
+          </div>
+        )}
         <Button
           onClick={onContinue}
           className="h-14 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-base font-medium text-background shadow-lg shadow-primary/20 hover:opacity-95"
