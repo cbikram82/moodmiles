@@ -9,7 +9,13 @@ import type { User } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
 import { supabase, supabaseConfigured } from "./supabase";
 
-const isNative = Capacitor.isNativePlatform();
+function checkIsNative() {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -62,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Listen for deep link callback on native
     let cleanupPromise: Promise<() => void> | undefined;
-    if (isNative) {
+    if (checkIsNative()) {
       cleanupPromise = import("@capacitor/app").then(async ({ App }) => {
         const handle = await App.addListener("appUrlOpen", async ({ url }) => {
           if (url.includes("callback")) {
@@ -90,31 +96,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    if (!supabaseConfigured) return;
+    if (!supabaseConfigured) {
+      console.error("Supabase not configured");
+      return;
+    }
 
-    if (isNative) {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: "com.moodmiles.app://callback",
-          skipBrowserRedirect: true,
-        },
-      });
+    const native = checkIsNative();
 
-      if (error || !data.url) {
-        console.error("OAuth error:", error?.message);
-        return;
+    try {
+      if (native) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: "com.moodmiles.app://callback",
+            skipBrowserRedirect: true,
+          },
+        });
+
+        if (error || !data.url) {
+          console.error("OAuth error:", error?.message);
+          return;
+        }
+
+        try {
+          const { Browser } = await import("@capacitor/browser");
+          await Browser.open({ url: data.url });
+        } catch {
+          window.open(data.url, "_blank");
+        }
+      } else {
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
       }
-
-      const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: data.url });
-    } else {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
+    } catch (e) {
+      console.error("Sign-in failed:", e);
     }
   };
 
