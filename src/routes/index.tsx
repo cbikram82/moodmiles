@@ -592,8 +592,8 @@ function Landing({ onStart }: { onStart: () => void }) {
       <div className="space-y-8">
         <div className="relative mx-auto h-44 w-44">
           <div className="absolute inset-0 animate-pulse rounded-full bg-gradient-to-br from-accent/40 via-primary/30 to-chart-3/30 blur-2xl" />
-          <div className="relative flex h-full w-full items-center justify-center rounded-full border border-border/40 bg-card/50 overflow-hidden backdrop-blur-xl">
-            <img src={logoUrl} alt="MoodMiles Logo" className="h-32 w-32 object-contain" />
+          <div className="relative flex h-full w-full items-center justify-center rounded-full border border-border/40 bg-white overflow-hidden shadow-lg">
+            <img src={logoUrl} alt="MoodMiles Logo" className="h-full w-full object-cover rounded-full" />
           </div>
         </div>
 
