@@ -40,9 +40,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
+
+      if (session?.user) {
+        const u = session.user;
+        await supabase.from("profiles").upsert(
+          {
+            id: u.id,
+            display_name: u.user_metadata?.full_name ?? null,
+            avatar_url: u.user_metadata?.avatar_url ?? null,
+          },
+          { onConflict: "id" }
+        );
+      }
     });
 
     return () => {
