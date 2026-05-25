@@ -281,7 +281,7 @@ function MoodMiles() {
         <div className="absolute bottom-0 left-1/2 h-[24rem] w-[24rem] -translate-x-1/2 rounded-full bg-chart-3/15 blur-[120px]" />
       </div>
 
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-10 pt-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-10 pt-[calc(1.5rem+env(safe-area-inset-top))]">
         <Header
           step={step}
           onBack={() => stepBack(step, setStep)}
