@@ -731,10 +731,12 @@ function RouteScreen({
     );
   }, [deviceLocation, userLocation]);
 
-  const isFarAway = useMemo(() => {
-    if (!deviceLocation || !userLocation || !usingCustomLocation) return false;
-    return distanceToStartMiles > 1.0;
-  }, [deviceLocation, userLocation, usingCustomLocation, distanceToStartMiles]);
+  const showNavigationButton = usingCustomLocation && userLocation;
+
+  const distanceLabel = useMemo(() => {
+    if (!deviceLocation || !userLocation) return "";
+    return ` (${distanceToStartMiles.toFixed(1)} miles away)`;
+  }, [deviceLocation, userLocation, distanceToStartMiles]);
 
   const handleNavigateToStart = () => {
     if (!userLocation) return;
@@ -796,13 +798,13 @@ function RouteScreen({
         </p>
       </div>
 
-      {isFarAway && (
+      {showNavigationButton && (
         <Button
           onClick={handleNavigateToStart}
           className="h-14 w-full rounded-2xl border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent font-medium transition flex items-center justify-center gap-2 shadow-sm shadow-accent/5 animate-in fade-in slide-in-from-bottom-2 duration-300 cursor-pointer"
         >
           <Navigation className="h-4 w-4 fill-accent animate-pulse" />
-          Navigate to Start Point ({distanceToStartMiles.toFixed(1)} miles away)
+          Navigate to Start Point{distanceLabel}
         </Button>
       )}
 
