@@ -378,7 +378,7 @@ function MoodMiles() {
 
       {/* Settings Modal */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/60 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-sm rounded-3xl border border-border/80 bg-card/90 p-6 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border/50 pb-4">
               <div className="flex items-center gap-2">
