@@ -71,6 +71,7 @@ export function MoodMap({
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationName, setLocationName] = useState<string>("Detecting location...");
   const [routingDistance, setRoutingDistance] = useState<number>(0);
+  const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
 
   // Real-time breadcrumbs tracking
   const [breadcrumbs, setBreadcrumbs] = useState<LatLng[]>([]);
@@ -127,9 +128,11 @@ export function MoodMap({
     let watchId: number | null = null;
 
     if (!navigator.geolocation) {
-      setUserLocation(DEFAULT_COORDS);
-      setLocationName("London, UK (Default)");
-      setLoading(false);
+      if (!usingCustomLocation) {
+        setUserLocation(DEFAULT_COORDS);
+        setLocationName("London, UK (Default)");
+        setLoading(false);
+      }
       return;
     }
 
@@ -173,7 +176,7 @@ export function MoodMap({
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-    } else {
+    } else if (!usingCustomLocation) {
       // 2B. Single shot planning retrieval
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -199,7 +202,7 @@ export function MoodMap({
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [liveTracking, onDistanceChange]);
+  }, [liveTracking, onDistanceChange, usingCustomLocation]);
 
   // 3. Algorithmic spatial loop generator
   const getLoopWaypoints = (start: LatLng): LatLng[] => {
@@ -233,6 +236,12 @@ export function MoodMap({
     return waypoints;
   };
 
+  // Reset custom location back to browser GPS
+  const handleResetToGPS = () => {
+    setLoading(true);
+    setUsingCustomLocation(false);
+  };
+
   // 4. Initialize Map (Leaflet) & Draw planned route + Breadcrumbs
   useEffect(() => {
     if (!L || loading || !userLocation || mapTheme !== "real" || !mapContainerRef.current) return;
@@ -250,6 +259,18 @@ export function MoodMap({
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         maxZoom: 20,
       }).addTo(map);
+
+      // Add map click listener to drop pins in planning mode
+      if (!liveTracking) {
+        map.on("click", (e: any) => {
+          setUserLocation({
+            lat: e.latlng.lat,
+            lng: e.latlng.lng,
+          });
+          setLocationName("Custom Location");
+          setUsingCustomLocation(true);
+        });
+      }
 
       // Add CSS glowing classes
       const styleId = "leaflet-custom-marker-styles";
@@ -318,97 +339,105 @@ export function MoodMap({
         `;
         document.head.appendChild(styleEl);
       }
+    }
 
-      // Calculate coordinates loop
-      const waypoints = getLoopWaypoints(userLocation);
-      const fullCoordinates = [userLocation, ...waypoints, userLocation];
-      const coordinatesString = fullCoordinates
-        .map((coord) => `${coord.lng},${coord.lat}`)
-        .join(";");
-      const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson`;
+    const map = mapInstanceRef.current;
+    
+    // Clear all existing markers/polylines from map before redrawing (since start coordinates shifted)
+    map.eachLayer((layer: any) => {
+      if (!!layer.toGeoJSON) { // Clear shapes
+        map.removeLayer(layer);
+      } else if (layer instanceof L.Marker) { // Clear markers
+        map.removeLayer(layer);
+      }
+    });
 
-      // Static Custom Start Pin
-      const startIcon = L.divIcon({
-        className: "custom-start-marker",
-        html: `
-          <div class="glowing-start-pin">
-            <div class="glowing-start-pin-ring"></div>
-            <div class="glowing-start-pin-core"></div>
-          </div>
-        `,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      L.marker([userLocation.lat, userLocation.lng], { icon: startIcon }).addTo(map);
+    // Calculate coordinates loop
+    const waypoints = getLoopWaypoints(userLocation);
+    const fullCoordinates = [userLocation, ...waypoints, userLocation];
+    const coordinatesString = fullCoordinates
+      .map((coord) => `${coord.lng},${coord.lat}`)
+      .join(";");
+    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson`;
 
-      // Waypoint Dots Custom Pin
-      const wpIcon = L.divIcon({
-        className: "custom-wp-marker",
-        html: `<div class="custom-wp-pin"></div>`,
-        iconSize: [8, 8],
-        iconAnchor: [4, 4],
-      });
+    // Static Custom Start Pin
+    const startIcon = L.divIcon({
+      className: "custom-start-marker",
+      html: `
+        <div class="glowing-start-pin">
+          <div class="glowing-start-pin-ring"></div>
+          <div class="glowing-start-pin-core"></div>
+        </div>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    L.marker([userLocation.lat, userLocation.lng], { icon: startIcon }).addTo(map);
 
-      // Call OSRM
-      fetch(osrmUrl)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.code === "Ok" && data.routes && data.routes[0]) {
-            const route = data.routes[0];
-            if (!liveTracking) {
-              setRoutingDistance(route.distance / 1000);
-            }
+    // Waypoint Dots Custom Pin
+    const wpIcon = L.divIcon({
+      className: "custom-wp-marker",
+      html: `<div class="custom-wp-pin"></div>`,
+      iconSize: [8, 8],
+      iconAnchor: [4, 4],
+    });
 
-            const latLngs = route.geometry.coordinates.map((coord: number[]) => [
-              coord[1],
-              coord[0],
-            ]) as any[];
-
-            const polyline = L.polyline(latLngs, {
-              color: "#8b5cf6",
-              weight: 4.5,
-              opacity: 0.85,
-              lineJoin: "round",
-            }).addTo(map);
-
-            waypoints.forEach((wp) => {
-              L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
-            });
-
-            // Focus planned bounds initially
-            if (!liveTracking) {
-              map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
-            }
-          } else {
-            throw new Error("OSRM Failed status: " + data.code);
+    // Call OSRM
+    fetch(osrmUrl)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.code === "Ok" && data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          if (!liveTracking) {
+            setRoutingDistance(route.distance / 1000);
           }
-        })
-        .catch(() => {
-          // Straight line fallback
-          const pathCoords = [...fullCoordinates].map((c) => [c.lat, c.lng]) as any[];
-          const polyline = L.polyline(pathCoords, {
-            color: "#a78bfa",
-            weight: 4,
-            opacity: 0.8,
-            dashArray: "6, 8",
+
+          const latLngs = route.geometry.coordinates.map((coord: number[]) => [
+            coord[1],
+            coord[0],
+          ]) as any[];
+
+          const polyline = L.polyline(latLngs, {
+            color: "#8b5cf6",
+            weight: 4.5,
+            opacity: 0.85,
+            lineJoin: "round",
           }).addTo(map);
 
           waypoints.forEach((wp) => {
             L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
           });
 
+          // Focus planned bounds initially or pan to center if location updated
           if (!liveTracking) {
             map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
-            setRoutingDistance(getSpeedKmh() * (duration / 60));
           }
-        });
-    }
+        } else {
+          throw new Error("OSRM Failed status: " + data.code);
+        }
+      })
+      .catch(() => {
+        // Straight line fallback
+        const pathCoords = [...fullCoordinates].map((c) => [c.lat, c.lng]) as any[];
+        const polyline = L.polyline(pathCoords, {
+          color: "#a78bfa",
+          weight: 4,
+          opacity: 0.8,
+          dashArray: "6, 8",
+        }).addTo(map);
 
-    const map = mapInstanceRef.current;
+        waypoints.forEach((wp) => {
+          L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+        });
+
+        if (!liveTracking) {
+          map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
+          setRoutingDistance(getSpeedKmh() * (duration / 60));
+        }
+      });
 
     // B. LIVE ROUTE & GPS RENDERING (React state ticks)
     if (liveTracking) {
-      // 1. Create or move the live user marker
       const liveIcon = L.divIcon({
         className: "custom-live-marker",
         html: `
@@ -427,13 +456,12 @@ export function MoodMap({
         liveMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
       }
 
-      // 2. Draw/Update lived breadcrumbs trail
       if (breadcrumbs.length > 1) {
         const pathPoints = breadcrumbs.map((pt) => [pt.lat, pt.lng]) as any[];
 
         if (!liveBreadcrumbsPolylineRef.current) {
           liveBreadcrumbsPolylineRef.current = L.polyline(pathPoints, {
-            color: "#06b6d4", // glowing cyan trail
+            color: "#06b6d4",
             weight: 5,
             opacity: 0.9,
             lineJoin: "round",
@@ -443,7 +471,6 @@ export function MoodMap({
         }
       }
 
-      // 3. Keep center focused on live GPS
       map.panTo([userLocation.lat, userLocation.lng], { animate: true });
     }
   }, [L, loading, userLocation, mapTheme, breadcrumbs, liveTracking]);
@@ -468,7 +495,7 @@ export function MoodMap({
 
     let animationFrameId: number;
     let width = (canvas.width = canvasRef.current.parentElement?.clientWidth || 400);
-    let height = (canvas.height = 176);
+    let height = (canvas.height = 240); // Height matching h-60 size (240px)
 
     const speedKmh = getSpeedKmh();
     const calculatedDist = speedKmh * (duration / 60);
@@ -477,7 +504,7 @@ export function MoodMap({
     const handleResize = () => {
       if (!canvasRef.current) return;
       width = canvas.width = canvasRef.current.parentElement?.clientWidth || 400;
-      height = canvas.height = 176;
+      height = canvas.height = 240;
     };
     window.addEventListener("resize", handleResize);
 
@@ -488,7 +515,7 @@ export function MoodMap({
       const pts = [];
       const distFactor = duration / 15;
       const maxW = Math.min(width / 3.2, 100) * (0.6 + distFactor * 0.1);
-      const maxH = 50 * (0.6 + distFactor * 0.15);
+      const maxH = 65 * (0.6 + distFactor * 0.15); // scaled up for taller canvas
 
       if (mood === "Clear Mind") {
         pts.push({ x: startPoint.x + maxW * 0.2, y: startPoint.y - maxH * 1.8 });
@@ -516,7 +543,7 @@ export function MoodMap({
     let dashOffset = 0;
 
     // Simulation metrics
-    let simProgress = 0; // 0 to 1 representation along full loop path
+    let simProgress = 0;
     let lastTime = Date.now();
 
     const render = () => {
@@ -564,20 +591,17 @@ export function MoodMap({
       }
       ctx.stroke();
 
-      // Calculate user's dynamic simulated coordinates along the path
       const now = Date.now();
-      const elapsed = (now - lastTime) / 1000; // seconds
+      const elapsed = (now - lastTime) / 1000;
       lastTime = now;
 
       if (liveTracking) {
-        // Speed up simulation to loop every 40 seconds for demonstration, keeping actual distance calculations accurate
         simProgress = (simProgress + elapsed * 0.025) % 1;
         onDistanceChange?.(simProgress * calculatedDist);
       } else {
         simProgress = 0;
       }
 
-      // Map progress to absolute pixel point
       const getPointAlongPath = (t: number) => {
         const numSegments = fullPath.length - 1;
         const scaledT = t * numSegments;
@@ -597,7 +621,6 @@ export function MoodMap({
 
       const livePoint = getPointAlongPath(simProgress);
 
-      // Traveled Breadcrumbs Path (Glowing Cyan)
       if (simProgress > 0) {
         ctx.shadowBlur = 15;
         ctx.shadowColor = "rgba(6, 182, 212, 0.6)";
@@ -606,17 +629,14 @@ export function MoodMap({
         ctx.beginPath();
         ctx.moveTo(startPoint.x, startPoint.y);
 
-        // Draw fully completed segments
         for (let i = 1; i <= livePoint.index; i++) {
           ctx.lineTo(fullPath[i].x, fullPath[i].y);
         }
-        // Draw partial active segment
         ctx.lineTo(livePoint.x, livePoint.y);
         ctx.stroke();
         ctx.shadowBlur = 0;
       }
 
-      // Static Custom planned waypoints
       waypoints.forEach((pt) => {
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
@@ -627,7 +647,6 @@ export function MoodMap({
         ctx.stroke();
       });
 
-      // Start/Finish Static Marker
       ctx.beginPath();
       ctx.arc(startPoint.x, startPoint.y, 6, 0, Math.PI * 2);
       ctx.fillStyle = "#10b981";
@@ -636,7 +655,6 @@ export function MoodMap({
       ctx.strokeStyle = "#ffffff";
       ctx.stroke();
 
-      // Live Tracking Cursor Indicator with glowing rings
       if (liveTracking) {
         const livePulse = 0.4 + 0.25 * Math.sin(now * 0.005);
         ctx.beginPath();
@@ -671,7 +689,7 @@ export function MoodMap({
 
   if (loading) {
     return (
-      <div className="flex h-44 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl">
+      <div className="flex h-60 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <span className="mt-2 text-xs text-muted-foreground">
           Locating your coordinates...
@@ -684,12 +702,20 @@ export function MoodMap({
     <div className="space-y-2">
       {/* Geolocation metadata banner */}
       <div className="flex items-center justify-between text-xs px-1">
-        <span className="flex items-center gap-1.5 text-muted-foreground">
-          <Compass className="h-3.5 w-3.5 text-accent animate-pulse" />
-          <span className="truncate max-w-[200px]">{locationName}</span>
+        <span className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+          <Compass className="h-3.5 w-3.5 text-accent animate-pulse shrink-0" />
+          <span className="truncate max-w-[140px] font-medium text-foreground">{locationName}</span>
+          {usingCustomLocation && !liveTracking && (
+            <button
+              onClick={handleResetToGPS}
+              className="text-[10px] text-accent hover:underline shrink-0 font-medium cursor-pointer"
+            >
+              (Reset to GPS)
+            </button>
+          )}
         </span>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
-          {liveTracking ? "Live tracking progress" : mapTheme === "real" ? "Walkable Loop" : "Procedural Loop"} · ~
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 shrink-0">
+          {liveTracking ? "Live" : mapTheme === "real" ? "Walkable Loop" : "Procedural Loop"} · ~
           {liveTracking
             ? (Math.round(cumulativeDistance * 100) / 100).toFixed(2)
             : (Math.round(routingDistance * 10) / 10).toFixed(1)}{" "}
@@ -697,12 +723,30 @@ export function MoodMap({
         </span>
       </div>
 
-      {/* Map container frame */}
-      <div className="relative h-44 w-full overflow-hidden rounded-3xl border border-border/60 shadow-lg shadow-black/10">
+      {/* Map container frame - Height increased to h-60 for accessibility */}
+      <div className="relative h-60 w-full overflow-hidden rounded-3xl border border-border/60 shadow-lg shadow-black/10">
         {mapTheme === "real" ? (
-          <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
+          <>
+            <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
+            
+            {/* Soft Overlay Label Tip for Interactive Tapping */}
+            {!liveTracking && (
+              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full bg-background/90 px-3.5 py-1 text-[9px] font-semibold text-muted-foreground tracking-wider uppercase border border-border/40 pointer-events-none shadow-sm backdrop-blur-md">
+                Tap map to drop start pin
+              </div>
+            )}
+          </>
         ) : (
-          <canvas ref={canvasRef} className="block h-full w-full bg-[#0c0d12]" />
+          <>
+            <canvas ref={canvasRef} className="block h-full w-full bg-[#0c0d12]" />
+            
+            {/* Helper Tip in Cyberpunk mode */}
+            {!liveTracking && (
+              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full bg-background/90 px-3.5 py-1 text-[9px] font-semibold text-muted-foreground tracking-wider uppercase border border-border/40 pointer-events-none shadow-sm backdrop-blur-md">
+                Switch to street map to drop custom pin
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

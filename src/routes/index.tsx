@@ -167,6 +167,11 @@ function MoodMiles() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Geolocated / Custom Location states hoisted to parent so it is shared across both planning and active screens
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
+  const [locationName, setLocationName] = useState<string>("Detecting location...");
+
   const route = useMemo(() => (mood ? ROUTES[mood] : null), [mood]);
 
   const reset = () => {
@@ -175,6 +180,8 @@ function MoodMiles() {
     setDuration(null);
     setActivity(null);
     setPostFeel(null);
+    setUserLocation(null);
+    setUsingCustomLocation(false);
   };
 
   return (
@@ -232,6 +239,12 @@ function MoodMiles() {
               mapTheme={mapTheme}
               walkingSpeed={walkingSpeed}
               runningSpeed={runningSpeed}
+              userLocation={userLocation}
+              setUserLocation={setUserLocation}
+              usingCustomLocation={usingCustomLocation}
+              setUsingCustomLocation={setUsingCustomLocation}
+              locationName={locationName}
+              setLocationName={setLocationName}
               onOpenSettings={() => setSettingsOpen(true)}
               onStart={() => setStep("active")}
             />
@@ -245,6 +258,12 @@ function MoodMiles() {
               mapTheme={mapTheme}
               walkingSpeed={walkingSpeed}
               runningSpeed={runningSpeed}
+              userLocation={userLocation}
+              setUserLocation={setUserLocation}
+              usingCustomLocation={usingCustomLocation}
+              setUsingCustomLocation={setUsingCustomLocation}
+              locationName={locationName}
+              setLocationName={setLocationName}
               onComplete={() => setStep("post")}
             />
           )}
@@ -634,6 +653,12 @@ function RouteScreen({
   mapTheme,
   walkingSpeed,
   runningSpeed,
+  userLocation,
+  setUserLocation,
+  usingCustomLocation,
+  setUsingCustomLocation,
+  locationName,
+  setLocationName,
   onOpenSettings,
   onStart,
 }: {
@@ -644,6 +669,12 @@ function RouteScreen({
   mapTheme: "real" | "cyberpunk";
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
+  userLocation: { lat: number; lng: number } | null;
+  setUserLocation: (coords: { lat: number; lng: number } | null) => void;
+  usingCustomLocation: boolean;
+  setUsingCustomLocation: (val: boolean) => void;
+  locationName: string;
+  setLocationName: (name: string) => void;
   onOpenSettings: () => void;
   onStart: () => void;
 }) {
@@ -670,6 +701,12 @@ function RouteScreen({
         mapTheme={mapTheme}
         walkingSpeed={walkingSpeed}
         runningSpeed={runningSpeed}
+        userLocation={userLocation}
+        setUserLocation={setUserLocation}
+        usingCustomLocation={usingCustomLocation}
+        setUsingCustomLocation={setUsingCustomLocation}
+        locationName={locationName}
+        setLocationName={setLocationName}
       />
 
       <p className="text-[15px] leading-relaxed text-foreground/85">
@@ -818,6 +855,12 @@ interface ActiveScreenProps {
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
   onComplete: () => void;
+  userLocation: { lat: number; lng: number } | null;
+  setUserLocation: (coords: { lat: number; lng: number } | null) => void;
+  usingCustomLocation: boolean;
+  setUsingCustomLocation: (val: boolean) => void;
+  locationName: string;
+  setLocationName: (name: string) => void;
 }
 
 function ActiveScreen({
@@ -829,6 +872,12 @@ function ActiveScreen({
   walkingSpeed,
   runningSpeed,
   onComplete,
+  userLocation,
+  setUserLocation,
+  usingCustomLocation,
+  setUsingCustomLocation,
+  locationName,
+  setLocationName,
 }: ActiveScreenProps) {
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -882,6 +931,12 @@ function ActiveScreen({
         runningSpeed={runningSpeed}
         liveTracking={true}
         onDistanceChange={setLiveDistance}
+        userLocation={userLocation}
+        setUserLocation={setUserLocation}
+        usingCustomLocation={usingCustomLocation}
+        setUsingCustomLocation={setUsingCustomLocation}
+        locationName={locationName}
+        setLocationName={setLocationName}
       />
 
       {/* Primary Metrics Grid */}
