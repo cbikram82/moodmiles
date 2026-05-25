@@ -101,8 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.url) {
-        const { Browser } = await import("@capacitor/browser");
-        await Browser.open({ url: data.url });
+        try {
+          const { Browser } = await import("@capacitor/browser");
+          await Browser.open({ url: data.url });
+        } catch {
+          window.open(data.url, "_blank");
+        }
       }
     } else {
       const redirectTo =
