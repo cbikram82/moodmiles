@@ -258,6 +258,24 @@ export function MoodMap({
     setRouteCenter(null); // Triggers GPS retrieval effect
   };
 
+  // Clean up Leaflet map instance dynamically when switching themes or loading
+  useEffect(() => {
+    if (mapTheme !== "real" || loading || !routeCenter) {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          console.warn("Leaflet map cleanup warning: ", e);
+        }
+        mapInstanceRef.current = null;
+        polylineRef.current = null;
+        markersRef.current = [];
+        liveMarkerRef.current = null;
+        liveBreadcrumbsPolylineRef.current = null;
+      }
+    }
+  }, [mapTheme, loading, routeCenter]);
+
   // 4. Initialize Map (Leaflet) & Draw planned route + Breadcrumbs
   useEffect(() => {
     if (!L || loading || !routeCenter || mapTheme !== "real" || !mapContainerRef.current) return;
