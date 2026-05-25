@@ -257,6 +257,13 @@ function MoodMiles() {
             />
           )}
         </div>
+
+        {/* Footnote */}
+        <footer className="mt-8 text-center pb-2">
+          <p className="text-[10px] text-muted-foreground/45 tracking-wider">
+            Created by <span className="font-medium text-foreground/45">Bikram Chatterjee</span>
+          </p>
+        </footer>
       </div>
 
       {/* Settings Modal */}
