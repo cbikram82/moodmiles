@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,6 +23,10 @@ import {
   Settings,
   X,
   Navigation,
+  Timer,
+  MapPin,
+  TrendingUp,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodMap } from "@/components/MoodMap";
@@ -44,7 +48,13 @@ type Mood =
 
 type Duration = 15 | 30 | 45 | 60;
 type Activity = "Walk" | "Run";
-type Step = "landing" | "mood" | "time" | "activity" | "route" | "active" | "post";
+type Step = "landing" | "mood" | "time" | "activity" | "route" | "active" | "recap" | "post";
+
+interface JourneyData {
+  seconds: number;
+  distanceKm: number;
+  breadcrumbs: { lat: number; lng: number }[];
+}
 
 const MOODS: { label: Mood; icon: React.ComponentType<{ className?: string }>; hint: string }[] = [
   { label: "Calm", icon: Wind, hint: "Settle the nervous system" },
@@ -203,6 +213,7 @@ function MoodMiles() {
   const [duration, setDuration] = useState<Duration | null>(null);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [postFeel, setPostFeel] = useState<"Better" | "Same" | "Worse" | null>(null);
+  const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
 
   // User Preferences
   const [mapTheme, setMapTheme] = useState<"real" | "cyberpunk">(() => {
@@ -269,6 +280,7 @@ function MoodMiles() {
     setDuration(null);
     setActivity(null);
     setPostFeel(null);
+    setJourneyData(null);
     setUserLocation(null);
     setUsingCustomLocation(false);
   };
@@ -356,7 +368,20 @@ function MoodMiles() {
               locationName={locationName}
               setLocationName={setLocationName}
               musicProvider={musicProvider}
-              onComplete={() => setStep("post")}
+              onComplete={(data) => {
+                setJourneyData(data);
+                setStep("recap");
+              }}
+            />
+          )}
+          {step === "recap" && journeyData && mood && route && (
+            <RecapScreen
+              journeyData={journeyData}
+              mood={mood}
+              routeTitle={route.title}
+              activity={activity!}
+              duration={duration!}
+              onContinue={() => setStep("post")}
             />
           )}
           {step === "post" && mood && (
@@ -534,7 +559,7 @@ function MoodMiles() {
 }
 
 function stepBack(step: Step, setStep: (s: Step) => void) {
-  const order: Step[] = ["landing", "mood", "time", "activity", "route", "active", "post"];
+  const order: Step[] = ["landing", "mood", "time", "activity", "route", "active", "recap", "post"];
   const idx = order.indexOf(step);
   if (idx > 0) setStep(order[idx - 1]);
 }
@@ -550,7 +575,7 @@ function Header({
   onReset: () => void;
   onOpenSettings: () => void;
 }) {
-  const showBack = step !== "landing" && step !== "post";
+  const showBack = step !== "landing" && step !== "post" && step !== "recap";
   return (
     <header className="flex items-center justify-between">
       <button
@@ -1023,6 +1048,271 @@ function PostScreen({
   );
 }
 
+function useCountUp(target: number, durationMs: number = 1200, delay: number = 0) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    let raf: number;
+    let startTime: number | null = null;
+    const timeout = setTimeout(() => {
+      const animate = (timestamp: number) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / durationMs, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setValue(target * eased);
+        if (progress < 1) {
+          raf = requestAnimationFrame(animate);
+        } else {
+          setValue(target);
+        }
+      };
+      raf = requestAnimationFrame(animate);
+    }, delay);
+
+    return () => {
+      clearTimeout(timeout);
+      cancelAnimationFrame(raf);
+    };
+  }, [target, durationMs, delay]);
+
+  return value;
+}
+
+function RecapScreen({
+  journeyData,
+  mood,
+  routeTitle,
+  activity,
+  duration,
+  onContinue,
+}: {
+  journeyData: JourneyData;
+  mood: Mood;
+  routeTitle: string;
+  activity: Activity;
+  duration: Duration;
+  onContinue: () => void;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const [mapReady, setMapReady] = useState(false);
+
+  const animatedSeconds = useCountUp(journeyData.seconds, 1200, 300);
+  const animatedDistance = useCountUp(journeyData.distanceKm, 1200, 500);
+
+  const paceSecondsPerKm =
+    journeyData.distanceKm > 0.01
+      ? journeyData.seconds / journeyData.distanceKm
+      : 0;
+  const animatedPace = useCountUp(paceSecondsPerKm, 1200, 700);
+
+  const formatTime = (totalSecs: number) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = Math.floor(totalSecs % 60);
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatPace = (secPerKm: number) => {
+    if (secPerKm === 0) return "--:--";
+    const mins = Math.floor(secPerKm / 60);
+    const secs = Math.floor(secPerKm % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Load Leaflet and render static breadcrumb map
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      journeyData.breadcrumbs.length < 2 ||
+      !mapContainerRef.current
+    )
+      return;
+
+    let map: any = null;
+
+    import("leaflet").then((L) => {
+      if (!mapContainerRef.current || mapRef.current) return;
+
+      map = L.map(mapContainerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        touchZoom: false,
+        boxZoom: false,
+        keyboard: false,
+      });
+      mapRef.current = map;
+
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        { maxZoom: 20 }
+      ).addTo(map);
+
+      const pathCoords = journeyData.breadcrumbs.map((pt) => [
+        pt.lat,
+        pt.lng,
+      ]) as [number, number][];
+
+      const polyline = L.polyline(pathCoords, {
+        color: "#06b6d4",
+        weight: 4,
+        opacity: 0.9,
+        lineJoin: "round",
+        lineCap: "round",
+      }).addTo(map);
+
+      // Start marker
+      const startIcon = L.divIcon({
+        className: "recap-start-marker",
+        html: `<div style="height:12px;width:12px;border-radius:9999px;background:#10b981;border:2px solid #fff;box-shadow:0 0 8px rgba(16,185,129,0.6);"></div>`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+      });
+      const startPt = journeyData.breadcrumbs[0];
+      L.marker([startPt.lat, startPt.lng], { icon: startIcon }).addTo(map);
+
+      // End marker
+      const endPt =
+        journeyData.breadcrumbs[journeyData.breadcrumbs.length - 1];
+      if (endPt !== startPt) {
+        const endIcon = L.divIcon({
+          className: "recap-end-marker",
+          html: `<div style="height:12px;width:12px;border-radius:9999px;background:#8b5cf6;border:2px solid #fff;box-shadow:0 0 8px rgba(139,92,246,0.6);"></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+        });
+        L.marker([endPt.lat, endPt.lng], { icon: endIcon }).addTo(map);
+      }
+
+      map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+      setMapReady(true);
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [journeyData.breadcrumbs]);
+
+  const hasBreadcrumbs = journeyData.breadcrumbs.length >= 2;
+
+  return (
+    <section className="space-y-6 pt-2 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="text-center space-y-2 animate-in fade-in slide-in-from-bottom-3 duration-500">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30 border border-primary/20">
+          <Trophy className="h-7 w-7 text-primary" />
+        </div>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-accent">
+          Journey Complete
+        </p>
+        <h2 className="text-3xl font-bold tracking-tight">{routeTitle}</h2>
+        <div className="flex justify-center flex-wrap gap-2 pt-1">
+          <Chip>{mood}</Chip>
+          <Chip>{duration} min</Chip>
+          <Chip>{activity}</Chip>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 gap-3" style={{ animationDelay: "300ms" }}>
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "300ms" }}>
+          <div className="flex justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
+              <Timer className="h-4 w-4 text-cyan-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+            {formatTime(animatedSeconds)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Duration
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "500ms" }}>
+          <div className="flex justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20">
+              <MapPin className="h-4 w-4 text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+            {animatedDistance.toFixed(2)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Kilometers
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "700ms" }}>
+          <div className="flex justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20">
+              <TrendingUp className="h-4 w-4 text-violet-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+            {formatPace(animatedPace)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Pace /km
+          </div>
+        </div>
+      </div>
+
+      {/* Mini Route Map */}
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "800ms" }}>
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+            <Compass className="h-3.5 w-3.5 text-accent" />
+            Your trail
+          </div>
+        </div>
+        {hasBreadcrumbs ? (
+          <div className="relative h-48 w-full overflow-hidden rounded-2xl border border-border/60 shadow-lg shadow-black/10">
+            <div
+              ref={mapContainerRef}
+              className="absolute inset-0 h-full w-full bg-background"
+            />
+            {!mapReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-card/60 backdrop-blur-sm">
+                <span className="text-xs text-muted-foreground">
+                  Loading trail...
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex h-48 flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/40 backdrop-blur">
+            <MapPin className="h-8 w-8 text-muted-foreground/40 mb-2" />
+            <span className="text-xs text-muted-foreground">
+              No GPS trail recorded for this journey
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 mt-1">
+              Enable location access to see your route
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Continue Button */}
+      <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both" style={{ animationDelay: "1000ms" }}>
+        <Button
+          onClick={onContinue}
+          className="h-14 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-base font-medium text-background shadow-lg shadow-primary/20 hover:opacity-95"
+        >
+          Continue
+          <ArrowRight className="ml-1 h-4 w-4" />
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 interface ActiveScreenProps {
   route: (typeof ROUTES)[Mood];
   mood: Mood;
@@ -1031,7 +1321,7 @@ interface ActiveScreenProps {
   mapTheme: "real" | "cyberpunk";
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
-  onComplete: () => void;
+  onComplete: (data: JourneyData) => void;
   userLocation: { lat: number; lng: number } | null;
   setUserLocation: (coords: { lat: number; lng: number } | null) => void;
   usingCustomLocation: boolean;
@@ -1061,6 +1351,7 @@ function ActiveScreen({
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liveDistance, setLiveDistance] = useState(0);
+  const [breadcrumbs, setBreadcrumbs] = useState<{ lat: number; lng: number }[]>([]);
 
   useEffect(() => {
     if (paused) return;
@@ -1146,6 +1437,7 @@ function ActiveScreen({
         runningSpeed={runningSpeed}
         liveTracking={true}
         onDistanceChange={setLiveDistance}
+        onBreadcrumbsChange={setBreadcrumbs}
         routeCenter={userLocation}
         setRouteCenter={setUserLocation}
         usingCustomLocation={usingCustomLocation}
@@ -1216,7 +1508,7 @@ function ActiveScreen({
           {paused ? "Resume" : "Pause"}
         </Button>
         <Button
-          onClick={onComplete}
+          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs })}
           className="h-13 rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 shadow-md shadow-primary/10 col-span-2"
         >
           Complete Journey

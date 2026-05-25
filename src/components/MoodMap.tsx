@@ -28,6 +28,7 @@ interface MoodMapProps {
   runningSpeed: "jog" | "fast" | "sprint";
   liveTracking?: boolean;
   onDistanceChange?: (distKm: number) => void;
+  onBreadcrumbsChange?: (breadcrumbs: LatLng[]) => void;
   routeCenter: LatLng | null;
   setRouteCenter: (coords: LatLng | null) => void;
   usingCustomLocation: boolean;
@@ -63,6 +64,7 @@ export function MoodMap({
   runningSpeed,
   liveTracking = false,
   onDistanceChange,
+  onBreadcrumbsChange,
   routeCenter,
   setRouteCenter,
   usingCustomLocation,
@@ -168,9 +170,8 @@ export function MoodMap({
             } else {
               const last = next[next.length - 1];
               const dist = haversineDistance(last, newPos);
-              if (dist > 0.003) { // 3 meters threshold
+              if (dist > 0.003) {
                 next.push(newPos);
-                // Accumulate distance
                 setCumulativeDistance((prevDist) => {
                   const updated = prevDist + dist;
                   onDistanceChange?.(updated);
@@ -178,6 +179,7 @@ export function MoodMap({
                 });
               }
             }
+            onBreadcrumbsChange?.(next);
             return next;
           });
         },
