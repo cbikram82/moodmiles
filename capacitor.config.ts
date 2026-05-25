@@ -6,7 +6,13 @@ const config: CapacitorConfig = {
   webDir: 'dist/client',
   server: {
     url: 'https://moodmiles-production.up.railway.app',
-    cleartext: true
+    cleartext: true,
+    allowNavigation: [
+      'accounts.google.com',
+      '*.google.com',
+      '*.supabase.co',
+      'kqyqrwkwygcucfyinwzn.supabase.co',
+    ]
   }
 };
 
