@@ -1,7 +1,11 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import handler from './dist/server/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const port = process.env.PORT || 8080;
 
@@ -10,11 +14,16 @@ const server = http.createServer(async (req, res) => {
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const host = req.headers.host || `localhost:${port}`;
     const url = new URL(req.url || '', `${protocol}://${host}`);
-    const pathname = url.pathname;
+    const pathname = decodeURIComponent(url.pathname);
 
-    // 1. Check and serve static files directly from dist/client (Vite build assets)
-    const filePath = path.join(process.cwd(), 'dist/client', pathname);
+    // 1. Resolve and check static files directly from dist/client relative to server.js
+    const filePath = path.join(__dirname, 'dist/client', pathname);
     
+    // Log static file requests for debugging on Railway container logs
+    if (pathname.startsWith('/assets/') || pathname === '/favicon.ico') {
+      console.log(`[Static Server] Path: "${pathname}" -> Resolved to: "${filePath}" (Exists: ${fs.existsSync(filePath)})`);
+    }
+
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath);
       const contentType = {
@@ -103,4 +112,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`MoodMiles Server is listening on port ${port}`);
+  console.log(`Root directory: ${__dirname}`);
+  console.log(`Client directory: ${path.join(__dirname, 'dist/client')}`);
 });
