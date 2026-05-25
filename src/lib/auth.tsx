@@ -6,7 +6,10 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
 import { supabase, supabaseConfigured } from "./supabase";
+
+const isNative = Capacitor.isNativePlatform();
 
 interface AuthContextValue {
   user: User | null;
@@ -57,23 +60,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Native: listen for deep link callback after OAuth
+    let cleanupPromise: Promise<() => void> | undefined;
+    if (isNative) {
+      cleanupPromise = import("@capacitor/app").then(async ({ App }) => {
+        const handle = await App.addListener("appUrlOpen", async ({ url }) => {
+          if (url.includes("callback")) {
+            try {
+              const parsed = new URL(url);
+              const code = parsed.searchParams.get("code");
+              if (code) {
+                await supabase.auth.exchangeCodeForSession(code);
+              }
+            } catch (e) {
+              console.error("Deep link auth error:", e);
+            }
+          }
+        });
+        return () => {
+          handle.remove();
+        };
+      });
+    }
+
     return () => {
       subscription.unsubscribe();
+      cleanupPromise?.then((cleanup) => cleanup());
     };
   }, []);
 
   const signInWithGoogle = async () => {
     if (!supabaseConfigured) return;
 
-    const redirectTo =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : "https://moodmiles-production.up.railway.app";
+    if (isNative) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: "com.moodmiles.app://callback",
+          skipBrowserRedirect: true,
+        },
+      });
 
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
+      if (error || !data.url) {
+        console.error("OAuth error:", error?.message);
+        return;
+      }
+
+      try {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: data.url, presentationStyle: "popover" });
+      } catch {
+        window.open(data.url, "_system");
+      }
+    } else {
+      const redirectTo =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://moodmiles-production.up.railway.app";
+
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+    }
   };
 
   const signOut = async () => {
