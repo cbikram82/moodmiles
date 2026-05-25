@@ -1071,6 +1071,42 @@ function ActiveScreen({
     return () => clearInterval(interval);
   }, [paused]);
 
+  // Prevent mobile screen sleep to ensure uninterrupted hardware GPS tracking
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let wakeLock: any = null;
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+          console.log("[Wake Lock] Screen Wake Lock successfully activated.");
+        }
+      } catch (err: any) {
+        console.warn("[Wake Lock] Failed to acquire screen wake lock: ", err.message);
+      }
+    }
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !wakeLock) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          console.log("[Wake Lock] Screen Wake Lock released successfully.");
+        });
+      }
+    };
+  }, []);
+
   const targetSeconds = duration * 60;
   const percentElapsed = Math.min((seconds / targetSeconds) * 100, 100);
 
