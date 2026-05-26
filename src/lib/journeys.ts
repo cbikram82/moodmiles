@@ -68,22 +68,27 @@ export async function updateJourneyFeeling(
 }
 
 export async function getJourneyHistory(): Promise<JourneyRecord[]> {
-  if (!supabaseConfigured) return [];
+  try {
+    if (!supabaseConfigured) return [];
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
 
-  const { data, error } = await supabase
-    .from("journeys")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("completed_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("journeys")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("completed_at", { ascending: false });
 
-  if (error) {
-    console.error("Failed to fetch journey history:", error.message);
+    if (error) {
+      console.error("Failed to fetch journey history:", error.message);
+      return [];
+    }
+    return (data as JourneyRecord[]) ?? [];
+  } catch (e) {
+    console.error("getJourneyHistory exception:", e);
     return [];
   }
-  return (data as JourneyRecord[]) ?? [];
 }

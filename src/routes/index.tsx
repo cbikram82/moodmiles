@@ -703,10 +703,16 @@ function Landing({
       return;
     }
     setLoadingHistory(true);
-    getJourneyHistory().then((data) => {
-      setJourneys(data);
-      setLoadingHistory(false);
-    });
+    getJourneyHistory()
+      .then((data) => {
+        setJourneys(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load history:", err);
+      })
+      .finally(() => {
+        setLoadingHistory(false);
+      });
   }, [user]);
 
   const formatDate = (iso: string) => {
