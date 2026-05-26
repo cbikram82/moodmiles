@@ -64,5 +64,7 @@
 	<string>MoodMiles requires background location access to continuously track your route and progress even when the screen is dimmed or locked.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>MoodMiles requires continuous location tracking to trace your walked path during journeys without interruption.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>MoodMiles requires access to your motion and step sensors to count your steps in real-time during your walks and runs.</string>
 </dict>
 </plist>

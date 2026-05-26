@@ -20,6 +20,7 @@
     "@capacitor/core": "^7.4.4",
     "@capacitor/geolocation": "^7.0.0",
     "@capacitor/ios": "^7.4.4",
+    "@capgo/capacitor-pedometer": "^7.2.5",
     "@cloudflare/vite-plugin": "^1.25.5",
     "@googlemaps/js-api-loader": "^2.0.2",
     "@hookform/resolvers": "^5.2.2",

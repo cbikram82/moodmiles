@@ -43,6 +43,8 @@ import {
   getJourneyHistory,
   type JourneyRecord,
 } from "@/lib/journeys";
+import { Capacitor } from "@capacitor/core";
+import { CapacitorPedometer } from "@capgo/capacitor-pedometer";
 import logoUrl from "../logo.png";
 
 export const Route = createFileRoute("/")({
@@ -67,6 +69,7 @@ interface JourneyData {
   seconds: number;
   distanceKm: number;
   breadcrumbs: { lat: number; lng: number }[];
+  steps: number;
 }
 
 const MOODS: { label: Mood; icon: React.ComponentType<{ className?: string }>; hint: string }[] = [
@@ -848,7 +851,7 @@ function Landing({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-[11px]">
+                  <div className="flex items-center gap-3 text-[11px] flex-wrap">
                     <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
                       {j.mood}
                     </span>
@@ -858,6 +861,12 @@ function Landing({
                     <span className="text-muted-foreground">
                       {Number(j.distance_km).toFixed(2)} km
                     </span>
+                    {j.steps !== undefined && j.steps !== null && (
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Footprints className="h-3.5 w-3.5 text-emerald-400" />
+                        {j.steps.toLocaleString()} steps
+                      </span>
+                    )}
                     <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
                       {j.activity}
                     </span>
@@ -1343,6 +1352,7 @@ function RecapScreen({
       elapsedSeconds: journeyData.seconds,
       distanceKm: journeyData.distanceKm,
       breadcrumbs: journeyData.breadcrumbs,
+      steps: journeyData.steps || 0,
     }).then((id) => {
       onJourneySaved(id);
       setSaved(!!id);
@@ -1352,6 +1362,7 @@ function RecapScreen({
 
   const animatedSeconds = useCountUp(journeyData.seconds, 1200, 300);
   const animatedDistance = useCountUp(journeyData.distanceKm, 1200, 500);
+  const animatedSteps = useCountUp(journeyData.steps || 0, 1200, 700);
 
   const paceSecondsPerKm =
     journeyData.distanceKm > 0.01
@@ -1472,7 +1483,7 @@ function RecapScreen({
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3" style={{ animationDelay: "300ms" }}>
+      <div className="grid grid-cols-2 gap-3" style={{ animationDelay: "300ms" }}>
         <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "300ms" }}>
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
@@ -1502,6 +1513,20 @@ function RecapScreen({
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "700ms" }}>
+          <div className="flex justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+              <Footprints className="h-4 w-4 text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+            {animatedSteps.toLocaleString()}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Steps Taken
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "900ms" }}>
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20">
               <TrendingUp className="h-4 w-4 text-violet-400" />
@@ -1620,6 +1645,84 @@ function ActiveScreen({
   const [paused, setPaused] = useState(false);
   const [liveDistance, setLiveDistance] = useState(0);
   const [breadcrumbs, setBreadcrumbs] = useState<{ lat: number; lng: number }[]>([]);
+  const [liveSteps, setLiveSteps] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    let isTracking = false;
+    let listenerHandle: any = null;
+
+    async function startPedometer() {
+      if (!Capacitor.isNativePlatform()) {
+        console.log("[Pedometer] Running on web browser, using simulated step tracking.");
+        return;
+      }
+
+      try {
+        const available = await CapacitorPedometer.isAvailable();
+        if (!available.stepCounting) {
+          console.warn("[Pedometer] Step counting not available on this device.");
+          return;
+        }
+
+        let permission = await CapacitorPedometer.checkPermissions();
+        if (permission.activityRecognition !== "granted") {
+          permission = await CapacitorPedometer.requestPermissions();
+        }
+
+        if (permission.activityRecognition === "granted" && active) {
+          listenerHandle = await CapacitorPedometer.addListener("measurement", (data: any) => {
+            if (active && data && typeof data.numberOfSteps === "number") {
+              setLiveSteps(data.numberOfSteps);
+            }
+          });
+          await CapacitorPedometer.startMeasurementUpdates();
+          isTracking = true;
+          console.log("[Pedometer] Native pedometer started successfully.");
+        } else {
+          console.warn("[Pedometer] Pedometer permission denied.");
+        }
+      } catch (err: any) {
+        console.error("[Pedometer] Error in startPedometer:", err);
+      }
+    }
+
+    startPedometer();
+
+    // Web browser simulation if not native
+    let simulationInterval: any = null;
+    if (!Capacitor.isNativePlatform()) {
+      const stepsPerSecond = activity === "Run" ? 3 : 1.5;
+      simulationInterval = setInterval(() => {
+        if (!paused && active) {
+          setLiveSteps((prev) => Math.round(prev + stepsPerSecond));
+        }
+      }, 1000);
+    }
+
+    return () => {
+      active = false;
+      if (simulationInterval) {
+        clearInterval(simulationInterval);
+      }
+      if (Capacitor.isNativePlatform()) {
+        const cleanup = async () => {
+          try {
+            if (isTracking) {
+              await CapacitorPedometer.stopMeasurementUpdates();
+              console.log("[Pedometer] Native pedometer stopped.");
+            }
+            if (listenerHandle) {
+              await listenerHandle.remove();
+            }
+          } catch (err: any) {
+            console.error("[Pedometer] Error in cleanup:", err);
+          }
+        };
+        cleanup();
+      }
+    };
+  }, [activity, paused]);
 
   useEffect(() => {
     if (paused) return;
@@ -1715,28 +1818,41 @@ function ActiveScreen({
       />
 
       {/* Primary Metrics Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur flex flex-col justify-between">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Elapsed Time
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-3.5 backdrop-blur flex flex-col justify-between">
+          <div className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
+            Duration
           </div>
-          <div className="mt-2 text-3xl font-bold font-mono text-foreground">
+          <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             {formatTime(seconds)}
           </div>
-          <div className="mt-0.5 text-[10px] text-muted-foreground">
-            Target: {duration} mins
+          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">
+            Goal: {duration}m
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur flex flex-col justify-between">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Traveled
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-3.5 backdrop-blur flex flex-col justify-between">
+          <div className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
+            Distance
           </div>
-          <div className="mt-2 text-3xl font-bold font-mono text-cyan-400">
+          <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-cyan-400 truncate">
             {liveDistance.toFixed(2)}
           </div>
-          <div className="mt-0.5 text-[10px] text-muted-foreground">
+          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">
             Kilometers
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-3.5 backdrop-blur flex flex-col justify-between">
+          <div className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
+            Steps
+          </div>
+          <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-emerald-400 flex items-baseline gap-0.5 truncate">
+            <Footprints className="h-3.5 w-3.5 self-center mr-0.5 shrink-0" />
+            {liveSteps.toLocaleString()}
+          </div>
+          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">
+            Step Count
           </div>
         </div>
       </div>
@@ -1776,7 +1892,7 @@ function ActiveScreen({
           {paused ? "Resume" : "Pause"}
         </Button>
         <Button
-          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs })}
+          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs, steps: liveSteps })}
           className="h-13 rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 shadow-md shadow-primary/10 col-span-2"
         >
           Complete Journey
