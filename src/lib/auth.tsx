@@ -9,6 +9,8 @@ import type { User } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
 import { supabase, supabaseConfigured } from "./supabase";
 
+let lastProcessedCode: string | null = null;
+
 function checkIsNative() {
   try {
     return Capacitor.isNativePlatform();
@@ -91,6 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const parsed = new URL(parsedUrl);
               const code = parsed.searchParams.get("code");
               if (code) {
+                if (code === lastProcessedCode) {
+                  console.log("[DeepLink] Code already processed, skipping duplicate event.");
+                  return;
+                }
+                lastProcessedCode = code;
+
                 // Ensure SFSafariViewController/Browser is closed
                 import("@capacitor/browser").then(({ Browser }) => {
                   Browser.close().catch(() => {});
