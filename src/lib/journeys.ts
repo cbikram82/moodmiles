@@ -12,6 +12,7 @@ export interface JourneyRecord {
   breadcrumbs: { lat: number; lng: number }[];
   completed_at: string;
   steps?: number;
+  route_variant?: number;
 }
 
 export async function saveJourney(journey: {
@@ -23,6 +24,7 @@ export async function saveJourney(journey: {
   distanceKm: number;
   breadcrumbs: { lat: number; lng: number }[];
   steps: number;
+  routeVariant: number;
 }): Promise<string | null> {
   if (!supabaseConfigured) return null;
 
@@ -43,6 +45,7 @@ export async function saveJourney(journey: {
       distance_km: journey.distanceKm,
       breadcrumbs: journey.breadcrumbs,
       steps: journey.steps,
+      route_variant: journey.routeVariant,
     })
     .select("id")
     .single();

@@ -70,6 +70,7 @@ interface JourneyData {
   distanceKm: number;
   breadcrumbs: { lat: number; lng: number }[];
   steps: number;
+  routeVariant: number;
 }
 
 const MOODS: { label: Mood; icon: React.ComponentType<{ className?: string }>; hint: string }[] = [
@@ -90,89 +91,220 @@ const ROUTES: Record<Mood, {
   summary: string;
   pace: string;
   environment: string;
-  soundtrack: string;
-  prompt: string;
-  musicQuery: string;
+  variants: {
+    variantName: "Default" | "Labyrinth" | "Infinity";
+    soundtrack: string;
+    prompt: string;
+    musicQuery: string;
+  }[];
 }> = {
   Calm: {
     title: "Quiet Reset Loop",
-    summary:
-      "A gentle route designed to reduce noise, slow your breathing, and help you decompress.",
+    summary: "A gentle route designed to reduce noise, slow your breathing, and help you decompress.",
     pace: "Easy, unhurried",
     environment: "Tree-lined streets, parks, low traffic roads",
-    soundtrack: "Soft piano, ambient electronic, mellow acoustic",
-    prompt: "What thought are you ready to leave behind on this walk?",
-    musicQuery: "Soft piano ambient mellow acoustic walking",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Soft piano, ambient electronic, mellow acoustic",
+        prompt: "What thought are you ready to leave behind on this walk?",
+        musicQuery: "Soft piano ambient mellow acoustic walking"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Low-frequency binaural beats, deep space soundscape",
+        prompt: "Focus completely on the texture of the ground under your feet. How does each step land?",
+        musicQuery: "Binaural beats deep space soundscape grounding"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Bilateral stimulation tones, calming stream ambient",
+        prompt: "Name three things in your visual field that are green or blue. Notice their specific shade.",
+        musicQuery: "Bilateral stimulation audio calm nature stream"
+      }
+    ]
   },
   "Clear Mind": {
     title: "Open Sky Stretch",
-    summary:
-      "A linear route with long sightlines and minimal turns so your mind can untangle itself.",
+    summary: "A linear route with long sightlines and minimal turns so your mind can untangle itself.",
     pace: "Steady, rhythmic",
     environment: "Wide promenades, riverside paths, open horizons",
-    soundtrack: "Lo-fi beats, minimal ambient, light instrumental",
-    prompt: "What question keeps circling back to you lately?",
-    musicQuery: "Lofi chill minimal focus instrumental beats",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Lo-fi beats, minimal ambient, light instrumental",
+        prompt: "What question keeps circling back to you lately?",
+        musicQuery: "Lofi chill minimal focus instrumental beats"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Deep theta wave soundscapes, calming Tibetan bowls",
+        prompt: "Count your breaths up to 4 and back down. Inhale... Exhale... Let the count quiet the background noise.",
+        musicQuery: "Theta wave soundscapes calming tibetan singing bowls"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Bilateral ambient synth sweeps, gentle wind chimes",
+        prompt: "Observe the farthest point on the horizon. Walk toward it, imagining your thoughts expanding into that open space.",
+        musicQuery: "Bilateral panning ambient synth sweeps relaxing chimes"
+      }
+    ]
   },
   "Energy Boost": {
     title: "Sunrise Pulse Route",
-    summary:
-      "Mild inclines and busier streets to wake the body up and lift your tempo.",
+    summary: "Mild inclines and busier streets to wake the body up and lift your tempo.",
     pace: "Brisk and lively",
     environment: "City blocks, bright avenues, gentle hills",
-    soundtrack: "Upbeat indie, funky electronic, modern pop",
-    prompt: "What's one thing you're ready to bring fresh energy to today?",
-    musicQuery: "Upbeat energetic indie electronic running",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Upbeat indie, funky electronic, modern pop",
+        prompt: "What's one thing you're ready to bring fresh energy to today?",
+        musicQuery: "Upbeat energetic indie electronic running"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Synthwave rhythm, high-tempo retro beats",
+        prompt: "Match the tempo of your feet to the beat. Feel the direct power of each stride pushing you forward.",
+        musicQuery: "Upbeat synthwave retrowave high tempo dynamic drive"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Driving tribal drums, melodic house loops",
+        prompt: "Take a deep breath and raise your posture. What is one positive action you will take in the next three hours?",
+        musicQuery: "Driving tribal organic house progressive melodic beats"
+      }
+    ]
   },
   Reflective: {
     title: "Slow Lantern Path",
-    summary:
-      "A meandering loop with quiet pockets to let memories and thoughts surface gently.",
+    summary: "A meandering loop with quiet pockets to let memories and thoughts surface gently.",
     pace: "Slow, attentive",
     environment: "Old neighborhoods, lit alleys, garden paths",
-    soundtrack: "Piano sketches, neoclassical, ambient warmth",
-    prompt: "What moment from the past month deserves a second look?",
-    musicQuery: "Neoclassical piano warm ambient reflection",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Piano sketches, neoclassical, ambient warmth",
+        prompt: "What moment from the past month deserves a second look?",
+        musicQuery: "Neoclassical piano warm ambient reflection"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Slow acoustic guitar strings, cinematic cello",
+        prompt: "Recall a moment recently where you felt fully at ease. What did it feel like in your chest?",
+        musicQuery: "Slow acoustic instrumental guitar neoclassical cello"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Atmospheric ambient chimes, rain and piano tape loop",
+        prompt: "Think of one thing that went differently than planned, but taught you something valuable. How did you grow?",
+        musicQuery: "Rain ambient tape loop neoclassical piano chillout"
+      }
+    ]
   },
   Escape: {
     title: "Off-Map Wander",
-    summary:
-      "An unfamiliar loop chosen to break routine and let curiosity lead the way.",
+    summary: "An unfamiliar loop chosen to break routine and let curiosity lead the way.",
     pace: "Curious, drifting",
     environment: "New neighborhoods, hidden side streets, unfamiliar corners",
-    soundtrack: "World instrumentals, cinematic ambient, dreamy synths",
-    prompt: "If today wasn't yours yet, what would you do with the next hour?",
-    musicQuery: "Dreamy synths cinematic electronic wander",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "World instrumentals, cinematic ambient, dreamy synths",
+        prompt: "If today wasn't yours yet, what would you do with the next hour?",
+        musicQuery: "Dreamy synths cinematic electronic wander"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Space ambient drones, mysterious cosmic pads",
+        prompt: "Turn down an unfamiliar path or look closely at a building you usually ignore. What details reveal themselves?",
+        musicQuery: "Cosmic space ambient drone synth explorer soundtrack"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Psych-rock guitar delays, ethereal vocal layers",
+        prompt: "Let yourself step out of your regular story. Who are you when you are completely anonymous on these streets?",
+        musicQuery: "Psych rock guitar delays ambient chill psychedelic dream pop"
+      }
+    ]
   },
   Confidence: {
     title: "Tall Step Avenue",
-    summary:
-      "A bold, open route along main streets to help you reclaim your posture and presence.",
+    summary: "A bold, open route along main streets to help you reclaim your posture and presence.",
     pace: "Strong and grounded",
     environment: "Wide avenues, plazas, well-lit boulevards",
-    soundtrack: "Cinematic strings, modern soul, driving electronic",
-    prompt: "What would you do today if you fully trusted yourself?",
-    musicQuery: "Driving modern soul upbeat confidence walk",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Cinematic strings, modern soul, driving electronic",
+        prompt: "What would you do today if you fully trusted yourself?",
+        musicQuery: "Driving modern soul upbeat confidence walk"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Powerful orchestral brass, cinematic build-ups",
+        prompt: "Roll your shoulders back and stride with intent. Imagine your footprint leaving a solid mark of presence.",
+        musicQuery: "Cinematic epic orchestral brass hybrid electronic motivation"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Funky basslines, disco-soul grooves",
+        prompt: "Recall a major obstacle you successfully overcame. Feel that same resilience moving through your body right now.",
+        musicQuery: "Upbeat funky basslines disco soul groove stroll"
+      }
+    ]
   },
   Recovery: {
     title: "Soft Green Loop",
-    summary:
-      "A short, level route through quiet greenery to ease the body back to itself.",
+    summary: "A short, level route through quiet greenery to ease the body back to itself.",
     pace: "Very gentle, restorative",
     environment: "Flat parks, garden paths, shaded sidewalks",
-    soundtrack: "Nature sounds, warm ambient, slow acoustic",
-    prompt: "What does your body need you to hear right now?",
-    musicQuery: "Healing nature sounds warm ambient restore",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Nature sounds, warm ambient, slow acoustic",
+        prompt: "What does your body need you to hear right now?",
+        musicQuery: "Healing nature sounds warm ambient restore"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Soft harp strings, healing 432Hz solfeggio tones",
+        prompt: "Soften your jaw, your forehead, and your shoulders. Allow your pace to be completely effortless.",
+        musicQuery: "Soft harp healing 432hz solfeggio frequency peace"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Forest birds ambient, gentle acoustic lullaby",
+        prompt: "Inhale slowly for a count of 4, and let the exhale carry out any physical tension. Let yourself just be.",
+        musicQuery: "Gentle acoustic guitar sleeping forest birds sounds"
+      }
+    ]
   },
   "Creative Spark": {
     title: "Bright Detour Route",
-    summary:
-      "A varied loop with new textures, colors, and corners to nudge fresh ideas loose.",
+    summary: "A varied loop with new textures, colors, and corners to nudge fresh ideas loose.",
     pace: "Light, exploratory",
     environment: "Murals, markets, mixed neighborhoods, color-rich streets",
-    soundtrack: "Jazz fusion, playful electronic, indie psych",
-    prompt: "What half-formed idea wants a little more room today?",
-    musicQuery: "Jazz fusion playful electronic creative flow",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Jazz fusion, playful electronic, indie psych",
+        prompt: "What half-formed idea wants a little more room today?",
+        musicQuery: "Jazz fusion playful electronic creative flow"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Upbeat glitch-hop, playful 8-bit chiptune",
+        prompt: "Look for two objects of completely contrasting colors placed next to each other. What story do they suggest?",
+        musicQuery: "Playful glitch hop lofi chiptune retro video game creative"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Abstract synth arpeggios, progressive ambient beats",
+        prompt: "Combine two completely unrelated concepts in your head (e.g., a clock and a cloud). What new invention could they make?",
+        musicQuery: "Abstract modular synth arpeggios progressive math rock chill"
+      }
+    ]
   },
 };
 
@@ -232,6 +364,37 @@ function MoodMiles() {
   const [postFeel, setPostFeel] = useState<"Better" | "Same" | "Worse" | null>(null);
   const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
+  const [routeVariant, setRouteVariant] = useState<number>(0);
+
+  // Database-Backed Reinforcement Learning: Solve active route variant
+  useEffect(() => {
+    if (!mood) {
+      setRouteVariant(0);
+      return;
+    }
+    if (!user) {
+      setRouteVariant(0);
+      return;
+    }
+    getJourneyHistory(user.id)
+      .then((history) => {
+        const lastJourney = history.find((j) => j.mood === mood);
+        if (!lastJourney) {
+          setRouteVariant(0);
+        } else {
+          const lastVariant = lastJourney.route_variant || 0;
+          if (lastJourney.post_feeling === "Same" || lastJourney.post_feeling === "Worse") {
+            setRouteVariant((lastVariant + 1) % 3);
+          } else {
+            setRouteVariant(lastVariant);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to resolve route variant:", err);
+        setRouteVariant(0);
+      });
+  }, [mood, user]);
 
   // User Preferences
   const [mapTheme, setMapTheme] = useState<"real" | "cyberpunk">(() => {
@@ -302,6 +465,7 @@ function MoodMiles() {
     setSavedJourneyId(null);
     setUserLocation(null);
     setUsingCustomLocation(false);
+    setRouteVariant(0);
   };
 
   return (
@@ -377,6 +541,7 @@ function MoodMiles() {
               musicProvider={musicProvider}
               onOpenSettings={() => setSettingsOpen(true)}
               onStart={() => setStep("active")}
+              routeVariant={routeVariant}
             />
           )}
           {step === "active" && route && mood && duration && activity && (
@@ -399,6 +564,7 @@ function MoodMiles() {
                 setJourneyData(data);
                 setStep("recap");
               }}
+              routeVariant={routeVariant}
             />
           )}
           {step === "recap" && journeyData && mood && route && (
@@ -867,6 +1033,11 @@ function Landing({
                         {j.steps.toLocaleString()} steps
                       </span>
                     )}
+                    {j.route_variant !== undefined && j.route_variant !== null && j.route_variant > 0 && (
+                      <span className="rounded-full border border-accent/30 bg-accent/15 text-accent font-semibold px-2 py-0.5 text-[10px]">
+                        {j.route_variant === 1 ? "Labyrinth" : "Infinity"}
+                      </span>
+                    )}
                     <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
                       {j.activity}
                     </span>
@@ -1036,6 +1207,7 @@ function RouteScreen({
   musicProvider,
   onOpenSettings,
   onStart,
+  routeVariant,
 }: {
   route: (typeof ROUTES)[Mood];
   mood: Mood;
@@ -1054,7 +1226,10 @@ function RouteScreen({
   musicProvider: "spotify" | "apple" | "ytmusic" | "youtube" | "tidal";
   onOpenSettings: () => void;
   onStart: () => void;
+  routeVariant: number;
 }) {
+  const currentVariant = useMemo(() => route.variants[routeVariant] || route.variants[0], [route, routeVariant]);
+
   const distanceToStartMiles = useMemo(() => {
     if (!deviceLocation || !userLocation) return 0;
     return calculateDistanceMiles(
@@ -1088,7 +1263,7 @@ function RouteScreen({
           Your route
         </p>
         <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-          {route.title}
+          {route.title}{routeVariant === 1 ? " (Labyrinth)" : routeVariant === 2 ? " (Infinity)" : ""}
         </h2>
         <div className="flex flex-wrap gap-2 pt-1">
           <Chip>{mood}</Chip>
@@ -1110,6 +1285,7 @@ function RouteScreen({
         setUsingCustomLocation={setUsingCustomLocation}
         locationName={locationName}
         setLocationName={setLocationName}
+        routeVariant={routeVariant}
       />
 
       <p className="text-[15px] leading-relaxed text-foreground/85">
@@ -1122,10 +1298,10 @@ function RouteScreen({
         <DetailRow
           icon={Music}
           label="Soundtrack"
-          value={route.soundtrack}
+          value={currentVariant.soundtrack}
           action={
             <button
-              onClick={() => window.open(getMusicLaunchUrl(musicProvider, route.musicQuery), "_blank")}
+              onClick={() => window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")}
               className="rounded-lg bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
             >
               <Music className="h-3.5 w-3.5 animate-pulse" />
@@ -1141,7 +1317,7 @@ function RouteScreen({
           Reflective prompt
         </div>
         <p className="mt-2 text-[15px] italic leading-relaxed text-foreground/90">
-          "{route.prompt}"
+          "{currentVariant.prompt}"
         </p>
       </div>
 
@@ -1353,6 +1529,7 @@ function RecapScreen({
       distanceKm: journeyData.distanceKm,
       breadcrumbs: journeyData.breadcrumbs,
       steps: journeyData.steps || 0,
+      routeVariant: journeyData.routeVariant,
     }).then((id) => {
       onJourneySaved(id);
       setSaved(!!id);
@@ -1474,7 +1651,9 @@ function RecapScreen({
         <p className="text-[11px] uppercase tracking-[0.25em] text-accent">
           Journey Complete
         </p>
-        <h2 className="text-3xl font-bold tracking-tight">{routeTitle}</h2>
+        <h2 className="text-3xl font-bold tracking-tight">
+          {routeTitle}{journeyData.routeVariant === 1 ? " (Labyrinth)" : journeyData.routeVariant === 2 ? " (Infinity)" : ""}
+        </h2>
         <div className="flex justify-center flex-wrap gap-2 pt-1">
           <Chip>{mood}</Chip>
           <Chip>{duration} min</Chip>
@@ -1622,6 +1801,7 @@ interface ActiveScreenProps {
   locationName: string;
   setLocationName: (name: string) => void;
   musicProvider: "spotify" | "apple" | "ytmusic" | "youtube" | "tidal";
+  routeVariant: number;
 }
 
 function ActiveScreen({
@@ -1640,12 +1820,15 @@ function ActiveScreen({
   locationName,
   setLocationName,
   musicProvider,
+  routeVariant,
 }: ActiveScreenProps) {
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liveDistance, setLiveDistance] = useState(0);
   const [breadcrumbs, setBreadcrumbs] = useState<{ lat: number; lng: number }[]>([]);
   const [liveSteps, setLiveSteps] = useState(0);
+
+  const currentVariant = useMemo(() => route.variants[routeVariant] || route.variants[0], [route, routeVariant]);
 
   useEffect(() => {
     let active = true;
@@ -1815,6 +1998,7 @@ function ActiveScreen({
         setUsingCustomLocation={setUsingCustomLocation}
         locationName={locationName}
         setLocationName={setLocationName}
+        routeVariant={routeVariant}
       />
 
       {/* Primary Metrics Grid */}
@@ -1867,10 +2051,10 @@ function ActiveScreen({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[11px] leading-relaxed text-muted-foreground gap-2">
             <div>
-              <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span> {route.soundtrack}
+              <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span> {currentVariant.soundtrack}
             </div>
             <button
-              onClick={() => window.open(getMusicLaunchUrl(musicProvider, route.musicQuery), "_blank")}
+              onClick={() => window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")}
               className="rounded-lg bg-accent/20 hover:bg-accent/30 text-accent px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
             >
               <Music className="h-3 w-3 animate-pulse" />
@@ -1878,7 +2062,7 @@ function ActiveScreen({
             </button>
           </div>
           <p className="text-sm italic leading-relaxed text-foreground/95 bg-background/35 p-3 rounded-xl border border-border/40">
-            "{route.prompt}"
+            "{currentVariant.prompt}"
           </p>
         </div>
       </div>
@@ -1892,7 +2076,7 @@ function ActiveScreen({
           {paused ? "Resume" : "Pause"}
         </Button>
         <Button
-          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs, steps: liveSteps })}
+          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs, steps: liveSteps, routeVariant })}
           className="h-13 rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 shadow-md shadow-primary/10 col-span-2"
         >
           Complete Journey

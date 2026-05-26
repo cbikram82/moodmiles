@@ -35,6 +35,7 @@ interface MoodMapProps {
   setUsingCustomLocation: (val: boolean) => void;
   locationName: string;
   setLocationName: (name: string) => void;
+  routeVariant?: number;
 }
 
 // Default backup coordinates (London Hyde Park area)
@@ -71,6 +72,7 @@ export function MoodMap({
   setUsingCustomLocation,
   locationName,
   setLocationName,
+  routeVariant = 0,
 }: MoodMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -221,7 +223,18 @@ export function MoodMap({
     };
   }, [liveTracking, onDistanceChange, usingCustomLocation, routeCenter]);
 
-  // 3. Algorithmic spatial loop generator
+  // 3. Algorithmic spatial loop generator with 2D Rotation and Geometry Mutation
+  const rotateOffset = (latOff: number, lngOff: number, degrees: number) => {
+    if (degrees === 0) return { lat: latOff, lng: lngOff };
+    const radians = (degrees * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return {
+      lat: latOff * cos - lngOff * sin,
+      lng: latOff * sin + lngOff * cos,
+    };
+  };
+
   const getLoopWaypoints = (start: LatLng): LatLng[] => {
     const speedKmh = getSpeedKmh();
     const totalDistanceKm = speedKmh * (duration / 60);
@@ -231,24 +244,49 @@ export function MoodMap({
     const radLat = (start.lat * Math.PI) / 180;
     const lngOffset = sideKm / (111 * Math.cos(radLat));
 
-    const waypoints: LatLng[] = [];
+    const rawOffsets: { lat: number; lng: number }[] = [];
 
-    if (mood === "Clear Mind") {
-      waypoints.push({ lat: start.lat + latOffset * 1.8, lng: start.lng + lngOffset * 0.4 });
-    } else if (mood === "Creative Spark" || mood === "Escape") {
-      const factor = mood === "Escape" ? 1.3 : 1.1;
-      waypoints.push({ lat: start.lat + latOffset * factor, lng: start.lng - lngOffset * 0.3 });
-      waypoints.push({ lat: start.lat + latOffset * 1.6, lng: start.lng + lngOffset * 1.1 });
-      waypoints.push({ lat: start.lat - latOffset * 0.2, lng: start.lng + lngOffset * factor });
-    } else if (mood === "Energy Boost" || mood === "Confidence") {
-      waypoints.push({ lat: start.lat + latOffset, lng: start.lng - latOffset * 0.2 });
-      waypoints.push({ lat: start.lat + latOffset, lng: start.lng + lngOffset });
-      waypoints.push({ lat: start.lat, lng: start.lng + lngOffset });
+    if (routeVariant === 1) {
+      // Labyrinth / Winding organic loop relative to starting point
+      rawOffsets.push({ lat: latOffset * 0.8, lng: -lngOffset * 0.3 });
+      rawOffsets.push({ lat: latOffset * 1.5, lng: lngOffset * 0.2 });
+      rawOffsets.push({ lat: latOffset * 1.0, lng: lngOffset * 1.1 });
+      rawOffsets.push({ lat: latOffset * 0.3, lng: lngOffset * 0.4 });
+    } else if (routeVariant === 2) {
+      // Infinity / Figure-Eight loop lobes relative to starting point
+      rawOffsets.push({ lat: latOffset * 0.9, lng: lngOffset * 0.8 });
+      rawOffsets.push({ lat: latOffset * 0.2, lng: lngOffset * 0.2 });
+      rawOffsets.push({ lat: -latOffset * 0.5, lng: lngOffset * 0.9 });
+      rawOffsets.push({ lat: latOffset * 0.5, lng: -lngOffset * 0.3 });
     } else {
-      waypoints.push({ lat: start.lat + latOffset, lng: start.lng });
-      waypoints.push({ lat: start.lat + latOffset, lng: start.lng + lngOffset });
-      waypoints.push({ lat: start.lat, lng: start.lng + lngOffset });
+      // Default (original shapes)
+      if (mood === "Clear Mind") {
+        rawOffsets.push({ lat: latOffset * 1.8, lng: lngOffset * 0.4 });
+      } else if (mood === "Creative Spark" || mood === "Escape") {
+        const factor = mood === "Escape" ? 1.3 : 1.1;
+        rawOffsets.push({ lat: latOffset * factor, lng: -lngOffset * 0.3 });
+        rawOffsets.push({ lat: latOffset * 1.6, lng: lngOffset * 1.1 });
+        rawOffsets.push({ lat: -latOffset * 0.2, lng: lngOffset * factor });
+      } else if (mood === "Energy Boost" || mood === "Confidence") {
+        rawOffsets.push({ lat: latOffset, lng: -lngOffset * 0.2 });
+        rawOffsets.push({ lat: latOffset, lng: lngOffset });
+        rawOffsets.push({ lat: 0, lng: lngOffset });
+      } else {
+        rawOffsets.push({ lat: latOffset, lng: 0 });
+        rawOffsets.push({ lat: latOffset, lng: lngOffset });
+        rawOffsets.push({ lat: 0, lng: lngOffset });
+      }
     }
+
+    // Apply 2D rotation of path coords based on route_variant (0 = 0 deg, 1 = 90 deg, 2 = 180 deg)
+    const angleDegrees = routeVariant * 90;
+    const waypoints = rawOffsets.map((offset) => {
+      const rotated = rotateOffset(offset.lat, offset.lng, angleDegrees);
+      return {
+        lat: start.lat + rotated.lat,
+        lng: start.lng + rotated.lng,
+      };
+    });
 
     return waypoints;
   };
@@ -553,28 +591,58 @@ export function MoodMap({
     const startPoint = { x: width / 2, y: height - padding };
 
     const getMoodWaypoints = () => {
-      const pts = [];
       const distFactor = duration / 15;
       const maxW = Math.min(width / 3.2, 100) * (0.6 + distFactor * 0.1);
       const maxH = 65 * (0.6 + distFactor * 0.15);
 
-      if (mood === "Clear Mind") {
-        pts.push({ x: startPoint.x + maxW * 0.2, y: startPoint.y - maxH * 1.8 });
-      } else if (mood === "Creative Spark" || mood === "Escape") {
-        pts.push({ x: startPoint.x - maxW * 0.8, y: startPoint.y - maxH * 0.6 });
-        pts.push({ x: startPoint.x + maxW * 0.6, y: startPoint.y - maxH * 1.9 });
-        pts.push({ x: startPoint.x + maxW * 1.2, y: startPoint.y - maxH * 0.9 });
-      } else if (mood === "Energy Boost" || mood === "Confidence") {
-        pts.push({ x: startPoint.x - maxW * 0.7, y: startPoint.y - maxH * 0.7 });
-        pts.push({ x: startPoint.x - maxW * 0.7, y: startPoint.y - maxH * 1.6 });
-        pts.push({ x: startPoint.x + maxW * 0.7, y: startPoint.y - maxH * 1.6 });
-        pts.push({ x: startPoint.x + maxW * 0.7, y: startPoint.y - maxH * 0.7 });
+      const rawCanvasOffsets: { dx: number; dy: number }[] = [];
+
+      if (routeVariant === 1) {
+        // Labyrinth / Winding organic loop relative to startPoint
+        rawCanvasOffsets.push({ dx: -maxW * 0.3, dy: -maxH * 0.8 });
+        rawCanvasOffsets.push({ dx: maxW * 0.2, dy: -maxH * 1.5 });
+        rawCanvasOffsets.push({ dx: maxW * 1.1, dy: -maxH * 1.0 });
+        rawCanvasOffsets.push({ dx: maxW * 0.4, dy: -maxH * 0.3 });
+      } else if (routeVariant === 2) {
+        // Infinity / Figure-Eight loop lobes relative to startPoint
+        rawCanvasOffsets.push({ dx: maxW * 0.8, dy: -maxH * 0.9 });
+        rawCanvasOffsets.push({ dx: maxW * 0.2, dy: -maxH * 0.2 });
+        rawCanvasOffsets.push({ dx: maxW * 0.9, dy: maxH * 0.5 });
+        rawCanvasOffsets.push({ dx: -maxW * 0.3, dy: -maxH * 0.5 });
       } else {
-        pts.push({ x: startPoint.x - maxW * 0.8, y: startPoint.y - maxH * 0.9 });
-        pts.push({ x: startPoint.x, y: startPoint.y - maxH * 1.8 });
-        pts.push({ x: startPoint.x + maxW * 0.8, y: startPoint.y - maxH * 0.9 });
+        // Default (original shapes)
+        if (mood === "Clear Mind") {
+          rawCanvasOffsets.push({ dx: maxW * 0.2, dy: -maxH * 1.8 });
+        } else if (mood === "Creative Spark" || mood === "Escape") {
+          const factor = mood === "Escape" ? 1.3 : 1.1;
+          rawCanvasOffsets.push({ dx: -maxW * 0.8, dy: -maxH * 0.6 });
+          rawCanvasOffsets.push({ dx: maxW * 0.6, dy: -maxH * 1.9 });
+          rawCanvasOffsets.push({ dx: maxW * 1.2, dy: -maxH * 0.9 });
+        } else if (mood === "Energy Boost" || mood === "Confidence") {
+          rawCanvasOffsets.push({ dx: -maxW * 0.7, dy: -maxH * 0.7 });
+          rawCanvasOffsets.push({ dx: -maxW * 0.7, dy: -maxH * 1.6 });
+          rawCanvasOffsets.push({ dx: maxW * 0.7, dy: -maxH * 1.6 });
+          rawCanvasOffsets.push({ dx: maxW * 0.7, dy: -maxH * 0.7 });
+        } else {
+          rawCanvasOffsets.push({ dx: -maxW * 0.8, dy: -maxH * 0.9 });
+          rawCanvasOffsets.push({ dx: 0, dy: -maxH * 1.8 });
+          rawCanvasOffsets.push({ dx: maxW * 0.8, dy: -maxH * 0.9 });
+        }
       }
-      return pts;
+
+      // 2D Rotation of canvas offsets around startPoint
+      const angleRad = (routeVariant * 90 * Math.PI) / 180;
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
+
+      return rawCanvasOffsets.map((offset) => {
+        const rotatedDx = offset.dx * cos - offset.dy * sin;
+        const rotatedDy = offset.dx * sin + offset.dy * cos;
+        return {
+          x: startPoint.x + rotatedDx,
+          y: startPoint.y + rotatedDy,
+        };
+      });
     };
 
     const waypoints = getMoodWaypoints();
