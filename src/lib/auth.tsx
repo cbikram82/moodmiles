@@ -115,31 +115,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    if (!supabaseConfigured) return;
+    try {
+      if (!supabaseConfigured) {
+        alert(
+          "Google Sign-In Error: Supabase is not configured. Please check if VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Railway's environment variables dashboard and that the application was rebuilt after setting them."
+        );
+        return;
+      }
 
-    const isNative = checkIsNative();
-    const redirectTo = isNative
-      ? "moodmiles://callback"
-      : `${window.location.origin}/auth/callback`;
+      const isNative = checkIsNative();
+      const redirectTo = isNative
+        ? "moodmiles://callback"
+        : `${window.location.origin}/auth/callback`;
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-        skipBrowserRedirect: isNative,
-      },
-    });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: isNative,
+        },
+      });
 
-    if (error || !data.url) {
-      console.error("OAuth error:", error?.message);
-      return;
-    }
+      if (error || !data.url) {
+        alert("OAuth initialization error: " + (error?.message || "No redirection URL returned from Supabase."));
+        console.error("OAuth error:", error?.message);
+        return;
+      }
 
-    if (isNative) {
-      const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: data.url, presentationStyle: "popover" });
-    } else {
-      window.location.href = data.url;
+      if (isNative) {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: data.url, presentationStyle: "popover" });
+      } else {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      alert("Sign-In Exception: " + err.message);
+      console.error("Google Sign-In Exception:", err);
     }
   };
 
