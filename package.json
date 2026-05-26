@@ -10,7 +10,8 @@
     "start": "node server.js",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "postinstall": "node scripts/patch-capacitor-spm.js"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
