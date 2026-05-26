@@ -703,7 +703,7 @@ function Landing({
       return;
     }
     setLoadingHistory(true);
-    getJourneyHistory()
+    getJourneyHistory(user.id)
       .then((data) => {
         setJourneys(data);
       })

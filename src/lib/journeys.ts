@@ -67,19 +67,24 @@ export async function updateJourneyFeeling(
   }
 }
 
-export async function getJourneyHistory(): Promise<JourneyRecord[]> {
+export async function getJourneyHistory(userId?: string): Promise<JourneyRecord[]> {
   try {
     if (!supabaseConfigured) return [];
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return [];
+    let activeUserId = userId;
+    if (!activeUserId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      activeUserId = user?.id;
+    }
+
+    if (!activeUserId) return [];
 
     const { data, error } = await supabase
       .from("journeys")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", activeUserId)
       .order("completed_at", { ascending: false });
 
     if (error) {
