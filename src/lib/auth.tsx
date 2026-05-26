@@ -84,9 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const handle = await App.addListener("appUrlOpen", async ({ url }) => {
           if (url.includes("callback")) {
             try {
-              const parsed = new URL(url);
+              // Convert custom scheme to https to ensure URL parses reliably
+              const parsedUrl = url.startsWith("moodmiles://")
+                ? url.replace("moodmiles://", "https://")
+                : url;
+              const parsed = new URL(parsedUrl);
               const code = parsed.searchParams.get("code");
               if (code) {
+                // Ensure SFSafariViewController/Browser is closed
+                import("@capacitor/browser").then(({ Browser }) => {
+                  Browser.close().catch(() => {});
+                });
                 await supabase.auth.exchangeCodeForSession(code);
               }
             } catch (e) {
@@ -109,11 +117,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     if (!supabaseConfigured) return;
 
+    const isNative = checkIsNative();
+    const redirectTo = isNative
+      ? "moodmiles://callback"
+      : `${window.location.origin}/auth/callback`;
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        skipBrowserRedirect: true,
+        redirectTo,
+        skipBrowserRedirect: isNative,
       },
     });
 
@@ -122,11 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Navigate the current page. In the Capacitor webview this either
-    // stays in-webview (if allowNavigation covers the domain) or
-    // Capacitor opens it in Safari. Both paths are handled by the
-    // /auth/callback page on return.
-    window.location.href = data.url;
+    if (isNative) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: data.url, presentationStyle: "popover" });
+    } else {
+      window.location.href = data.url;
+    }
   };
 
   const signOut = async () => {
