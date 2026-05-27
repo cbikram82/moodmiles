@@ -34,7 +34,10 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("CAPACITOR_RUN_ERROR:", error?.message || error);
+  if (error && typeof error === "object" && "stack" in error) {
+    console.error("CAPACITOR_RUN_STACK:", error.stack);
+  }
   const router = useRouter();
 
   return (

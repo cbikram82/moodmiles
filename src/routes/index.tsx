@@ -420,31 +420,36 @@ function MoodMiles() {
     }
 
     // 2. OpenStreetMap Nominatim reverse geocoding fallback
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=10`;
-    fetch(url, { headers: { "User-Agent": "MoodMiles Scenic Walk Detector" } })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.address) {
-          const addr = data.address;
-          const county = addr.county || "";
-          const district = addr.state_district || addr.suburb || addr.city || "";
-          
-          const textToSearch = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
-          const keywords = ["lake district", "national park", "forest", "reserve", "nature", "valley", "lake", "park"];
-          const isScenic = keywords.some(kw => textToSearch.includes(kw));
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=10`;
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.address) {
+            const addr = data.address;
+            const county = addr.county || "";
+            const district = addr.state_district || addr.suburb || addr.city || "";
+            
+            const textToSearch = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
+            const keywords = ["lake district", "national park", "forest", "reserve", "nature", "valley", "lake", "park"];
+            const isScenic = keywords.some(kw => textToSearch.includes(kw));
 
-          if (isScenic) {
-            const parsedName = county || district || "Beautiful Scenic Spot";
-            setScenicSpot({ name: parsedName });
-          } else {
-            setScenicSpot(null);
+            if (isScenic) {
+              const parsedName = county || district || "Beautiful Scenic Spot";
+              setScenicSpot({ name: parsedName });
+            } else {
+              setScenicSpot(null);
+            }
           }
-        }
-      })
-      .catch((err) => {
-        console.warn("Reverse geocoding scenic lookup failed:", err.message);
-        setScenicSpot(null);
-      });
+        })
+        .catch((err) => {
+          console.warn("Reverse geocoding scenic lookup failed:", err.message);
+          setScenicSpot(null);
+        });
+    } catch (err) {
+      console.warn("Reverse geocoding initiation failed:", err);
+      setScenicSpot(null);
+    }
   }, [userLocation, SCENIC_HOTSPOTS]);
 
   const handleLaunchScenic = (spotName: string) => {
