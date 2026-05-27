@@ -408,28 +408,17 @@ function calculateDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: 
   return R * c;
 }
 
-function MoodMiles() {
-  const { user, signInWithGoogle, signOut, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<Step>("landing");
-  const [mood, setMood] = useState<Mood | null>(null);
-  const [duration, setDuration] = useState<Duration | null>(null);
-  const [activity, setActivity] = useState<Activity | null>(null);
-  const [postFeel, setPostFeel] = useState<"Better" | "Same" | "Worse" | null>(null);
-  const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
-  const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
-  const [routeVariant, setRouteVariant] = useState<number>(0);
+const SCENIC_HOTSPOTS = [
+  { name: "Windermere, Lake District", lat: 54.3643, lng: -2.9207, radiusMiles: 10 },
+  { name: "Hyde Park, London", lat: 51.5073, lng: -0.1656, radiusMiles: 2 },
+  { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 },
+];
+
+function useScenicDetector(
+  userLocation: { lat: number; lng: number } | null,
+): { name: string } | null {
   const [scenicSpot, setScenicSpot] = useState<{ name: string } | null>(null);
 
-  const SCENIC_HOTSPOTS = useMemo(
-    () => [
-      { name: "Windermere, Lake District", lat: 54.3643, lng: -2.9207, radiusMiles: 10 },
-      { name: "Hyde Park, London", lat: 51.5073, lng: -0.1656, radiusMiles: 2 },
-      { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 },
-    ],
-    [],
-  );
-
-  // Location-Aware Scenic Spot Detector Effect
   useEffect(() => {
     if (!userLocation) {
       setScenicSpot(null);
@@ -458,7 +447,7 @@ function MoodMiles() {
             const county = addr.county || "";
             const district = addr.state_district || addr.suburb || addr.city || "";
 
-            const textToSearch = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
+            const searchStr = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
             const keywords = [
               "lake district",
               "national park",
@@ -469,7 +458,7 @@ function MoodMiles() {
               "lake",
               "park",
             ];
-            const isScenic = keywords.some((kw) => textToSearch.includes(kw));
+            const isScenic = keywords.some((kw) => searchStr.includes(kw));
 
             if (isScenic) {
               const parsedName = county || district || "Beautiful Scenic Spot";
@@ -487,7 +476,22 @@ function MoodMiles() {
       console.warn("Reverse geocoding initiation failed:", err);
       setScenicSpot(null);
     }
-  }, [userLocation, SCENIC_HOTSPOTS]);
+  }, [userLocation]);
+
+  return scenicSpot;
+}
+
+function MoodMiles() {
+  const { user, signInWithGoogle, signOut, loading: authLoading } = useAuth();
+  const [step, setStep] = useState<Step>("landing");
+  const [mood, setMood] = useState<Mood | null>(null);
+  const [duration, setDuration] = useState<Duration | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const [postFeel, setPostFeel] = useState<"Better" | "Same" | "Worse" | null>(null);
+  const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
+  const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
+  const [routeVariant, setRouteVariant] = useState<number>(0);
+  const scenicSpot = useScenicDetector(userLocation);
 
   const handleLaunchScenic = (spotName: string) => {
     setMood("Nature Connection");
