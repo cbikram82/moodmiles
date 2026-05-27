@@ -514,10 +514,7 @@ export function MoodMap({
     const waypoints = getLoopWaypoints(routeCenter);
     const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
     const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-    
-    // Snapping & Winding loop optimizations: continue_straight=false allows winding trails and U-turns.
-    // radiuses=all allows unlimited snapping to the nearest walkable path/trail inside parks.
-    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true&continue_straight=false&radiuses=${fullCoordinates.map(() => "all").join(";")}`;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true`;
 
     // Static Custom Start Pin
     const startIcon = L.divIcon({
