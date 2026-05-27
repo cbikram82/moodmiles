@@ -416,11 +416,13 @@ const SCENIC_HOTSPOTS = [
 
 function useScenicDetector(
   userLocation: { lat: number; lng: number } | null,
-): { name: string; isPark: boolean; parkName: string } | null {
+): { name: string; isPark: boolean; parkName: string; lat?: number; lng?: number } | null {
   const [scenicSpot, setScenicSpot] = useState<{
     name: string;
     isPark: boolean;
     parkName: string;
+    lat?: number;
+    lng?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -441,6 +443,8 @@ function useScenicDetector(
         name: matchedHotspot.name,
         isPark,
         parkName: isPark ? matchedHotspot.name : "",
+        lat: matchedHotspot.lat,
+        lng: matchedHotspot.lng,
       });
       return;
     }
@@ -514,6 +518,8 @@ function useScenicDetector(
                   name: parsedName,
                   isPark: !!detectedPark,
                   parkName: detectedPark || "",
+                  lat: userLocation.lat,
+                  lng: userLocation.lng,
                 });
               } else {
                 setScenicSpot(null);
@@ -530,9 +536,22 @@ function useScenicDetector(
       }
     };
 
-    // 2. OpenStreetMap Overpass API call to detect any parks within 1000m
+    // 2. OpenStreetMap Overpass API call: extremely granular search for any parks, commons, recreation grounds, gardens, forests, woods, meadows within 1000m
     try {
-      const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:5];(nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=park];nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];nwr(around:1000,${userLocation.lat},${userLocation.lng})[boundary=national_park];);out tags;`;
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:5];(` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=park];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=recreation_ground];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=garden];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=common];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[boundary=national_park];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=forest];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=meadow];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=recreation_ground];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=village_green];` +
+        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[natural=wood];` +
+        `);out center;`;
+
       fetch(overpassUrl)
         .then((res) => {
           if (!res.ok) throw new Error(`Overpass API error: ${res.status}`);
@@ -544,10 +563,16 @@ function useScenicDetector(
             const parkWithName = data.elements.find((el: any) => el.tags && el.tags.name);
             if (parkWithName) {
               const name = parkWithName.tags.name;
+              // Resolve coordinate: node has .lat/.lon, way/relation has .center.lat/.center.lon via 'out center'
+              const parkLat = parkWithName.lat || (parkWithName.center && parkWithName.center.lat);
+              const parkLng = parkWithName.lon || (parkWithName.center && parkWithName.center.lon);
+
               setScenicSpot({
                 name: name,
                 isPark: true,
                 parkName: name,
+                lat: parkLat !== undefined ? parkLat : userLocation.lat,
+                lng: parkLng !== undefined ? parkLng : userLocation.lng,
               });
               return;
             }
@@ -579,12 +604,16 @@ function MoodMiles() {
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [routeVariant, setRouteVariant] = useState<number>(0);
 
-  const handleLaunchScenic = (spotName: string) => {
+  const handleLaunchScenic = (spot: { name: string; lat?: number; lng?: number }) => {
     setMood("Nature Connection");
     setDuration(30);
     setActivity("Walk");
     setStep("route");
-    setLocationName(`${spotName} Scenic Trail`);
+    setLocationName(`${spot.name} Scenic Trail`);
+    if (spot.lat !== undefined && spot.lng !== undefined) {
+      setUserLocation({ lat: spot.lat, lng: spot.lng });
+      setUsingCustomLocation(true);
+    }
   };
 
   // Database-Backed Reinforcement Learning: Solve active route variant
@@ -747,7 +776,7 @@ function MoodMiles() {
               scenicSpot={scenicSpot}
               onLaunchScenic={() => {
                 if (scenicSpot) {
-                  handleLaunchScenic(scenicSpot.name);
+                  handleLaunchScenic(scenicSpot);
                 }
               }}
             />
