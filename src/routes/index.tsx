@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
@@ -868,7 +868,12 @@ function MoodMiles() {
         </div>
 
         {/* Footnote */}
-        <footer className="mt-8 text-center pb-2">
+        <footer className="mt-8 text-center pb-2 space-y-2">
+          <div className="flex justify-center gap-3 text-[10px] text-muted-foreground/45">
+            <Link to="/privacy" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Privacy Policy</Link>
+            <span>•</span>
+            <Link to="/terms" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Terms of Service</Link>
+          </div>
           <p className="text-[10px] text-muted-foreground/45 tracking-wider">
             Created by <span className="font-medium text-foreground/45">Bikram Chatterjee</span>
           </p>

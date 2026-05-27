@@ -76,6 +76,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "google-site-verification", content: "GQEJThLwLVaCMEBIEjgXLYqg13WfrIr3fLs4nyitDhc" },
       { title: "MoodMiles — Walk how you want to feel" },
       {
         name: "description",
