@@ -38,6 +38,7 @@ interface MoodMapProps {
   setLocationName: (name: string) => void;
   routeVariant?: number;
   prompt?: string;
+  onNavigationStepsChange?: (steps: string[]) => void;
 }
 
 // Default backup coordinates (London Hyde Park area)
@@ -63,6 +64,32 @@ function speakMindfulnessCue(text: string) {
   } catch (err) {
     console.warn("SpeechSynthesis error:", err);
   }
+}
+
+// Turn-by-turn navigation parser for OSRM steps
+function parseOSRMStep(step: any): string | null {
+  const type = step.maneuver.type;
+  const modifier = step.maneuver.modifier || "";
+  const name = step.name || "";
+  const distance = Math.round(step.distance);
+  
+  if (type === "arrive") {
+    return "Arrive back at your destination";
+  }
+  
+  let action = "";
+  if (type === "depart") {
+    action = name ? `Head ${modifier || "forward"} on ${name}` : "Start walking forward";
+  } else if (type === "turn") {
+    action = name ? `Turn ${modifier} onto ${name}` : `Turn ${modifier}`;
+  } else if (type === "new name") {
+    action = name ? `Continue onto ${name}` : "Continue forward";
+  } else {
+    if (!name) return null;
+    action = `Head ${modifier} onto ${name}`.trim();
+  }
+  
+  return distance > 0 ? `${action} and walk for ${distance} meters` : action;
 }
 
 // Haversine formula to compute distance in km between two GPS coordinates
@@ -98,6 +125,7 @@ export function MoodMap({
   setLocationName,
   routeVariant = 0,
   prompt,
+  onNavigationStepsChange,
 }: MoodMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -483,7 +511,7 @@ export function MoodMap({
     const waypoints = getLoopWaypoints(routeCenter);
     const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
     const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson`;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true`;
 
     // Static Custom Start Pin
     const startIcon = L.divIcon({
@@ -518,6 +546,22 @@ export function MoodMap({
           const route = data.routes[0];
           if (!liveTracking) {
             setRoutingDistance(route.distance / 1000);
+            
+            // Extract and parse step-by-step turn directions if steps exist
+            if (route.legs && route.legs[0] && onNavigationStepsChange) {
+              const parsedSteps: string[] = [];
+              route.legs.forEach((leg: any) => {
+                if (leg.steps) {
+                  leg.steps.forEach((step: any) => {
+                    const parsed = parseOSRMStep(step);
+                    if (parsed && !parsedSteps.includes(parsed)) {
+                      parsedSteps.push(parsed);
+                    }
+                  });
+                }
+              });
+              onNavigationStepsChange(parsedSteps);
+            }
           }
 
           const latLngs = route.geometry.coordinates.map((coord: number[]) => [

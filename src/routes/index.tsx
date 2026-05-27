@@ -2147,6 +2147,9 @@ function RouteScreen({
   routeVariant: number;
   setRouteVariant: React.Dispatch<React.SetStateAction<number>>;
 }) {
+  const [showDirections, setShowDirections] = useState(false);
+  const [navigationSteps, setNavigationSteps] = useState<string[]>([]);
+
   const currentVariant = useMemo(
     () => route.variants[routeVariant] || route.variants[0],
     [route, routeVariant],
@@ -2209,7 +2212,35 @@ function RouteScreen({
         setLocationName={setLocationName}
         routeVariant={routeVariant}
         prompt={currentVariant.prompt}
+        onNavigationStepsChange={setNavigationSteps}
       />
+
+      {navigationSteps.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card/40 p-4 backdrop-blur animate-in fade-in duration-300">
+          <button
+            onClick={() => setShowDirections(!showDirections)}
+            className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Compass className="h-4 w-4 text-primary animate-pulse" />
+              Route Directions ({navigationSteps.length} steps)
+            </span>
+            <span className="text-accent underline">
+              {showDirections ? "Hide" : "Show"}
+            </span>
+          </button>
+          
+          {showDirections && (
+            <ol className="mt-4 space-y-2.5 border-t border-border/40 pt-3 text-xs text-foreground/80 list-decimal pl-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+              {navigationSteps.map((step, idx) => (
+                <li key={idx} className="leading-relaxed">
+                  {step}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
 
       <p className="text-[15px] leading-relaxed text-foreground/85">{route.summary}</p>
 
