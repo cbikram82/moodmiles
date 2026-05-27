@@ -491,7 +491,6 @@ function MoodMiles() {
   const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [routeVariant, setRouteVariant] = useState<number>(0);
-  const scenicSpot = useScenicDetector(userLocation);
 
   const handleLaunchScenic = (spotName: string) => {
     setMood("Nature Connection");
@@ -566,6 +565,7 @@ function MoodMiles() {
 
   // Geolocated / Custom Location states hoisted to parent so it is shared across both planning and active screens
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const scenicSpot = useScenicDetector(userLocation);
   const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
   const [locationName, setLocationName] = useState<string>("Detecting location...");
   const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
