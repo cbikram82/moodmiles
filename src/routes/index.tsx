@@ -59,7 +59,8 @@ type Mood =
   | "Escape"
   | "Confidence"
   | "Recovery"
-  | "Creative Spark";
+  | "Creative Spark"
+  | "Nature Connection";
 
 type Duration = 15 | 30 | 45 | 60;
 type Activity = "Walk" | "Run";
@@ -82,6 +83,7 @@ const MOODS: { label: Mood; icon: React.ComponentType<{ className?: string }>; h
   { label: "Confidence", icon: Crown, hint: "Walk a little taller" },
   { label: "Recovery", icon: Leaf, hint: "Gentle restoration" },
   { label: "Creative Spark", icon: Lightbulb, hint: "Loosen new ideas" },
+  { label: "Nature Connection", icon: TreePine, hint: "Tune into natural beauty" },
 ];
 
 const DURATIONS: Duration[] = [15, 30, 45, 60];
@@ -306,6 +308,32 @@ const ROUTES: Record<Mood, {
       }
     ]
   },
+  "Nature Connection": {
+    title: "Nature Scenic Trail",
+    summary: "A breathtaking route tracing lakesides, green spaces, and scenic viewpoints to immerse yourself in the natural landscape.",
+    pace: "Easy, immersive",
+    environment: "Lakeside trails, national parks, scenic green areas",
+    variants: [
+      {
+        variantName: "Default",
+        soundtrack: "Deep acoustic strings, warm neoclassical chamber music",
+        prompt: "Notice the oldest tree or rock in your sightline. What stories do you think it has stood through?",
+        musicQuery: "Acoustic deep ambient warm neoclassical strings scenic"
+      },
+      {
+        variantName: "Labyrinth",
+        soundtrack: "Forest canopy bird songs, deep solfeggio ambient",
+        prompt: "Coordinate your breathing to the rustle of the leaves or the wind. Feel the solid earth push back under each stride.",
+        musicQuery: "Forest canopy bird songs healing solfeggio ambient peace"
+      },
+      {
+        variantName: "Infinity",
+        soundtrack: "Lakeside stream audio, soothing crystal singing bowls",
+        prompt: "Let your gaze rest on the horizon or water surface. Walk imagining your thoughts expanding into the open landscape.",
+        musicQuery: "Lakeside stream soothing crystal singing bowls meditation"
+      }
+    ]
+  }
 };
 
 function getMusicLaunchUrl(provider: string, query: string): string {
@@ -365,6 +393,67 @@ function MoodMiles() {
   const [journeyData, setJourneyData] = useState<JourneyData | null>(null);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [routeVariant, setRouteVariant] = useState<number>(0);
+  const [scenicSpot, setScenicSpot] = useState<{ name: string } | null>(null);
+
+  const SCENIC_HOTSPOTS = useMemo(() => [
+    { name: "Windermere, Lake District", lat: 54.3643, lng: -2.9207, radiusMiles: 10 },
+    { name: "Hyde Park, London", lat: 51.5073, lng: -0.1656, radiusMiles: 2 },
+    { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 }
+  ], []);
+
+  // Location-Aware Scenic Spot Detector Effect
+  useEffect(() => {
+    if (!userLocation) {
+      setScenicSpot(null);
+      return;
+    }
+
+    // 1. Hotspots lookup (distance-based)
+    const matchedHotspot = SCENIC_HOTSPOTS.find((spot) => {
+      const dist = calculateDistanceMiles(userLocation.lat, userLocation.lng, spot.lat, spot.lng);
+      return dist <= spot.radiusMiles;
+    });
+
+    if (matchedHotspot) {
+      setScenicSpot({ name: matchedHotspot.name });
+      return;
+    }
+
+    // 2. OpenStreetMap Nominatim reverse geocoding fallback
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=10`;
+    fetch(url, { headers: { "User-Agent": "MoodMiles Scenic Walk Detector" } })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.address) {
+          const addr = data.address;
+          const county = addr.county || "";
+          const district = addr.state_district || addr.suburb || addr.city || "";
+          
+          const textToSearch = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
+          const keywords = ["lake district", "national park", "forest", "reserve", "nature", "valley", "lake", "park"];
+          const isScenic = keywords.some(kw => textToSearch.includes(kw));
+
+          if (isScenic) {
+            const parsedName = county || district || "Beautiful Scenic Spot";
+            setScenicSpot({ name: parsedName });
+          } else {
+            setScenicSpot(null);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Reverse geocoding scenic lookup failed:", err.message);
+        setScenicSpot(null);
+      });
+  }, [userLocation, SCENIC_HOTSPOTS]);
+
+  const handleLaunchScenic = (spotName: string) => {
+    setMood("Nature Connection");
+    setDuration(30);
+    setActivity("Walk");
+    setStep("route");
+    setLocationName(`${spotName} Scenic Trail`);
+  };
 
   // Database-Backed Reinforcement Learning: Solve active route variant
   useEffect(() => {
@@ -515,6 +604,12 @@ function MoodMiles() {
               onSelect={(m) => {
                 setMood(m);
                 setTimeout(() => setStep("time"), 180);
+              }}
+              scenicSpot={scenicSpot}
+              onLaunchScenic={() => {
+                if (scenicSpot) {
+                  handleLaunchScenic(scenicSpot.name);
+                }
               }}
             />
           )}
@@ -1639,9 +1734,13 @@ function StepHeading({ kicker, title, sub }: { kicker: string; title: string; su
 function MoodStep({
   selected,
   onSelect,
+  scenicSpot,
+  onLaunchScenic,
 }: {
   selected: Mood | null;
   onSelect: (m: Mood) => void;
+  scenicSpot: { name: string } | null;
+  onLaunchScenic: () => void;
 }) {
   return (
     <section>
@@ -1650,25 +1749,58 @@ function MoodStep({
         title="How do you want to feel?"
         sub="Pick the closest fit. You don't have to be sure."
       />
-      <div className="grid grid-cols-2 gap-3">
+
+      {/* Symmetrical Scenic Suggester Banner */}
+      {scenicSpot && (
+        <div className="relative overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-br from-accent/20 via-primary/15 to-chart-3/15 p-4.5 mb-5 shadow-md shadow-primary/5 animate-in slide-in-from-top-2 duration-300">
+          <div className="absolute inset-0 -z-10 animate-pulse bg-gradient-to-tr from-accent/5 to-transparent blur-xl" />
+          <div className="flex gap-3 items-center">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30">
+              <TreePine className="h-4.5 w-4.5 text-primary animate-bounce" />
+            </div>
+            <div className="space-y-0.5 text-left min-w-0 flex-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                Scenic Spot Detected
+              </span>
+              <p className="text-xs font-semibold leading-relaxed text-foreground/95 truncate">
+                Looks like you are in {scenicSpot.name}!
+              </p>
+              <p className="text-[10px] text-muted-foreground/80 leading-tight">
+                Tap below to launch a nature-tuned scenic loop trail around the area.
+              </p>
+            </div>
+            <button
+              onClick={onLaunchScenic}
+              className="rounded-lg bg-primary/25 hover:bg-primary/40 text-primary px-3 py-1.5 text-xs font-bold cursor-pointer transition shrink-0 border border-primary/20"
+            >
+              Launch Trail
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3x3 Symmetrical Selection Grid */}
+      <div className="grid grid-cols-3 gap-3">
         {MOODS.map(({ label, icon: Icon, hint }) => {
           const active = selected === label;
           return (
             <button
               key={label}
               onClick={() => onSelect(label)}
-              className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition ${
+              className={`group relative overflow-hidden rounded-2xl border p-3.5 text-left transition flex flex-col justify-between h-36 ${
                 active
                   ? "border-primary/60 bg-gradient-to-br from-accent/20 to-primary/20"
                   : "border-border/60 bg-card/40 backdrop-blur hover:border-border"
               }`}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30 shrink-0">
                 <Icon className="h-4 w-4" />
               </div>
-              <div className="mt-3 text-sm font-medium">{label}</div>
-              <div className="mt-1 text-xs leading-snug text-muted-foreground">
-                {hint}
+              <div className="mt-2 min-w-0 w-full">
+                <div className="text-xs font-bold text-foreground leading-tight truncate">{label}</div>
+                <div className="mt-1 text-[9px] leading-snug text-muted-foreground line-clamp-2">
+                  {hint}
+                </div>
               </div>
             </button>
           );

@@ -271,6 +271,10 @@ export function MoodMap({
         rawOffsets.push({ lat: latOffset, lng: -lngOffset * 0.2 });
         rawOffsets.push({ lat: latOffset, lng: lngOffset });
         rawOffsets.push({ lat: 0, lng: lngOffset });
+      } else if (mood === "Nature Connection") {
+        rawOffsets.push({ lat: latOffset * 1.4, lng: -lngOffset * 0.5 });
+        rawOffsets.push({ lat: latOffset * 1.8, lng: lngOffset * 0.6 });
+        rawOffsets.push({ lat: latOffset * 0.2, lng: lngOffset * 1.2 });
       } else {
         rawOffsets.push({ lat: latOffset, lng: 0 });
         rawOffsets.push({ lat: latOffset, lng: lngOffset });
@@ -623,6 +627,10 @@ export function MoodMap({
           rawCanvasOffsets.push({ dx: -maxW * 0.7, dy: -maxH * 1.6 });
           rawCanvasOffsets.push({ dx: maxW * 0.7, dy: -maxH * 1.6 });
           rawCanvasOffsets.push({ dx: maxW * 0.7, dy: -maxH * 0.7 });
+        } else if (mood === "Nature Connection") {
+          rawCanvasOffsets.push({ dx: -maxW * 0.5, dy: -maxH * 1.4 });
+          rawCanvasOffsets.push({ dx: maxW * 0.6, dy: -maxH * 1.8 });
+          rawCanvasOffsets.push({ dx: maxW * 1.2, dy: -maxH * 0.2 });
         } else {
           rawCanvasOffsets.push({ dx: -maxW * 0.8, dy: -maxH * 0.9 });
           rawCanvasOffsets.push({ dx: 0, dy: -maxH * 1.8 });
