@@ -514,7 +514,7 @@ export function MoodMap({
     const waypoints = getLoopWaypoints(routeCenter);
     const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
     const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true`;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
 
     // Static Custom Start Pin
     const startIcon = L.divIcon({

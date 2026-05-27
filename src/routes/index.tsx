@@ -416,13 +416,21 @@ const SCENIC_HOTSPOTS = [
 
 function useScenicDetector(
   userLocation: { lat: number; lng: number } | null,
-): { name: string; isPark: boolean; parkName: string; lat?: number; lng?: number } | null {
+): {
+  name: string;
+  isPark: boolean;
+  parkName: string;
+  lat?: number;
+  lng?: number;
+  nearbyParks?: { name: string; lat: number; lng: number; distMiles: number }[];
+} | null {
   const [scenicSpot, setScenicSpot] = useState<{
     name: string;
     isPark: boolean;
     parkName: string;
     lat?: number;
     lng?: number;
+    nearbyParks?: { name: string; lat: number; lng: number; distMiles: number }[];
   } | null>(null);
 
   useEffect(() => {
@@ -536,20 +544,20 @@ function useScenicDetector(
       }
     };
 
-    // 2. OpenStreetMap Overpass API call: extremely granular search for any parks, commons, recreation grounds, gardens, forests, woods, meadows within 1000m
+    // 2. OpenStreetMap Overpass API call: extremely granular search for any parks, commons, recreation grounds, gardens, forests, woods, meadows within 8000m (5 miles)
     try {
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:5];(` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=park];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=recreation_ground];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=garden];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=common];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[boundary=national_park];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=forest];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=meadow];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=recreation_ground];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[landuse=village_green];` +
-        `nwr(around:1000,${userLocation.lat},${userLocation.lng})[natural=wood];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=park];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=recreation_ground];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=garden];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=common];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[boundary=national_park];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=forest];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=meadow];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=recreation_ground];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=village_green];` +
+        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[natural=wood];` +
         `);out center;`;
 
       fetch(overpassUrl)
@@ -573,8 +581,25 @@ function useScenicDetector(
               .sort((a: any, b: any) => a.dist - b.dist);
 
             if (sortedParks.length > 0) {
-              const closestPark = sortedParks[0];
+              // Extract unique nearby parks
+              const uniqueParksMap = new Map<string, any>();
+              sortedParks.forEach((p: any) => {
+                const pName = p.tags.name;
+                if (!uniqueParksMap.has(pName)) {
+                  uniqueParksMap.set(pName, p);
+                }
+              });
+
+              const uniqueSortedParks = Array.from(uniqueParksMap.values());
+              const closestPark = uniqueSortedParks[0];
               const name = closestPark.tags.name;
+
+              const topParks = uniqueSortedParks.slice(0, 4).map((p: any) => ({
+                name: p.tags.name,
+                lat: p.elLat,
+                lng: p.elLng,
+                distMiles: p.dist,
+              }));
 
               setScenicSpot({
                 name: name,
@@ -582,11 +607,12 @@ function useScenicDetector(
                 parkName: name,
                 lat: closestPark.elLat,
                 lng: closestPark.elLng,
+                nearbyParks: topParks,
               });
               return;
             }
           }
-          // If no parks found within 1000m, fallback to Nominatim reverse geocoding
+          // If no parks found within 5 miles, fallback to Nominatim reverse geocoding
           triggerNominatimFallback();
         })
         .catch((err) => {
@@ -830,6 +856,7 @@ function MoodMiles() {
               onStart={() => setStep("active")}
               routeVariant={routeVariant}
               setRouteVariant={setRouteVariant}
+              scenicSpot={scenicSpot}
             />
           )}
           {step === "active" && route && mood && duration && activity && (
@@ -2135,6 +2162,7 @@ function RouteScreen({
   onStart,
   routeVariant,
   setRouteVariant,
+  scenicSpot,
 }: {
   route: (typeof ROUTES)[Mood];
   mood: Mood;
@@ -2155,6 +2183,7 @@ function RouteScreen({
   onStart: () => void;
   routeVariant: number;
   setRouteVariant: React.Dispatch<React.SetStateAction<number>>;
+  scenicSpot: { name: string; isPark: boolean; parkName: string; lat?: number; lng?: number; nearbyParks?: { name: string; lat: number; lng: number; distMiles: number }[] } | null;
 }) {
   const [showDirections, setShowDirections] = useState(false);
   const [navigationSteps, setNavigationSteps] = useState<string[]>([]);
@@ -2205,6 +2234,42 @@ function RouteScreen({
           <Chip>{activity}</Chip>
         </div>
       </div>
+
+      {mood === "Nature Connection" && scenicSpot?.nearbyParks && scenicSpot.nearbyParks.length > 0 && (
+        <div className="space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-primary">
+            <TreePine className="h-3.5 w-3.5 text-accent animate-pulse" />
+            Nearby Nature Escapes (5-Mile Scan)
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory">
+            {scenicSpot.nearbyParks.map((park) => {
+              const isSelected = userLocation && Math.abs(userLocation.lat - park.lat) < 0.0001 && Math.abs(userLocation.lng - park.lng) < 0.0001;
+              return (
+                <button
+                  key={park.name}
+                  type="button"
+                  onClick={() => {
+                    setUserLocation({ lat: park.lat, lng: park.lng });
+                    setUsingCustomLocation(true);
+                    setLocationName(`${park.name} Scenic Trail`);
+                  }}
+                  className={`flex flex-col gap-1 shrink-0 w-[170px] rounded-2xl border p-3 text-left snap-start transition cursor-pointer ${
+                    isSelected
+                      ? "border-primary bg-primary/10 shadow-sm shadow-primary/20"
+                      : "border-border/60 bg-card/40 hover:bg-accent/10"
+                  }`}
+                >
+                  <span className="text-xs font-semibold text-foreground truncate w-full">{park.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{park.distMiles.toFixed(1)} miles away</span>
+                  <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-primary">
+                    {isSelected ? "★ Selected Escape" : "Launch Loop"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <MoodMap
         mood={mood}
