@@ -416,8 +416,12 @@ const SCENIC_HOTSPOTS = [
 
 function useScenicDetector(
   userLocation: { lat: number; lng: number } | null,
-): { name: string } | null {
-  const [scenicSpot, setScenicSpot] = useState<{ name: string } | null>(null);
+): { name: string; isPark: boolean; parkName: string } | null {
+  const [scenicSpot, setScenicSpot] = useState<{
+    name: string;
+    isPark: boolean;
+    parkName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!userLocation) {
@@ -432,68 +436,132 @@ function useScenicDetector(
     });
 
     if (matchedHotspot) {
-      setScenicSpot({ name: matchedHotspot.name });
+      const isPark = matchedHotspot.name.toLowerCase().includes("park");
+      setScenicSpot({
+        name: matchedHotspot.name,
+        isPark,
+        parkName: isPark ? matchedHotspot.name : "",
+      });
       return;
     }
 
-    // 2. OpenStreetMap Nominatim reverse geocoding fallback
+    // Helper: Fallback to reverse geocoding with OSM Nominatim
+    const triggerNominatimFallback = () => {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=18`;
+        fetch(url)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data && data.address) {
+              const addr = data.address;
+              const parkName =
+                addr.park ||
+                addr.leisure ||
+                addr.natural ||
+                addr.tourism ||
+                addr.attraction ||
+                "";
+              const county = addr.county || "";
+              const neighborhood = addr.neighbourhood || addr.suburb || "";
+              const district = addr.state_district || addr.city || "";
+
+              // Check if there is a park or green space name in data.display_name if not directly in address fields
+              let detectedPark = parkName;
+              if (!detectedPark && data.display_name) {
+                const parts = data.display_name.split(", ");
+                const parkSegment = parts.find((part) =>
+                  /\b(park|common|garden|wood|reserve|forest|meadow|heath|field|downs|lawn|recreation)\b/i.test(
+                    part,
+                  ),
+                );
+                if (parkSegment) {
+                  detectedPark = parkSegment;
+                }
+              }
+
+              const searchStr =
+                `${detectedPark} ${county} ${neighborhood} ${district} ${data.display_name || ""}`.toLowerCase();
+              const keywords = [
+                "park",
+                "lake district",
+                "national park",
+                "forest",
+                "reserve",
+                "nature",
+                "valley",
+                "lake",
+                "garden",
+                "meadow",
+                "common",
+                "wood",
+                "heath",
+                "field",
+                "walk",
+                "trail",
+                "hill",
+                "downs",
+                "moor",
+                "beck",
+                "water",
+                "leisure",
+              ];
+              const isScenic = keywords.some((kw) => searchStr.includes(kw)) || !!detectedPark;
+
+              if (isScenic) {
+                const parsedName =
+                  detectedPark || neighborhood || county || district || "Beautiful Scenic Spot";
+                setScenicSpot({
+                  name: parsedName,
+                  isPark: !!detectedPark,
+                  parkName: detectedPark || "",
+                });
+              } else {
+                setScenicSpot(null);
+              }
+            }
+          })
+          .catch((err) => {
+            console.warn("Reverse geocoding scenic lookup failed:", err.message);
+            setScenicSpot(null);
+          });
+      } catch (err) {
+        console.warn("Reverse geocoding initiation failed:", err);
+        setScenicSpot(null);
+      }
+    };
+
+    // 2. OpenStreetMap Overpass API call to detect any parks within 1000m
     try {
-      const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=18`;
-      fetch(url)
-        .then((res) => res.json())
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:5];(nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=park];nwr(around:1000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];nwr(around:1000,${userLocation.lat},${userLocation.lng})[boundary=national_park];);out tags;`;
+      fetch(overpassUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error(`Overpass API error: ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
-          if (data && data.address) {
-            const addr = data.address;
-            const parkName =
-              addr.park || addr.leisure || addr.natural || addr.tourism || addr.attraction || "";
-            const county = addr.county || "";
-            const neighborhood = addr.neighbourhood || addr.suburb || "";
-            const district = addr.state_district || addr.city || "";
-
-            const searchStr =
-              `${parkName} ${county} ${neighborhood} ${district} ${data.display_name || ""}`.toLowerCase();
-            const keywords = [
-              "park",
-              "lake district",
-              "national park",
-              "forest",
-              "reserve",
-              "nature",
-              "valley",
-              "lake",
-              "garden",
-              "meadow",
-              "common",
-              "wood",
-              "heath",
-              "field",
-              "walk",
-              "trail",
-              "hill",
-              "downs",
-              "moor",
-              "beck",
-              "water",
-              "leisure",
-            ];
-            const isScenic = keywords.some((kw) => searchStr.includes(kw)) || !!parkName;
-
-            if (isScenic) {
-              const parsedName =
-                parkName || neighborhood || county || district || "Beautiful Scenic Spot";
-              setScenicSpot({ name: parsedName });
-            } else {
-              setScenicSpot(null);
+          if (data && data.elements && data.elements.length > 0) {
+            // Find the first park object with a name tag
+            const parkWithName = data.elements.find((el: any) => el.tags && el.tags.name);
+            if (parkWithName) {
+              const name = parkWithName.tags.name;
+              setScenicSpot({
+                name: name,
+                isPark: true,
+                parkName: name,
+              });
+              return;
             }
           }
+          // If no parks found within 1000m, fallback to Nominatim reverse geocoding
+          triggerNominatimFallback();
         })
         .catch((err) => {
-          console.warn("Reverse geocoding scenic lookup failed:", err.message);
-          setScenicSpot(null);
+          console.warn("Overpass park lookup failed, trying Nominatim reverse geocoding:", err.message);
+          triggerNominatimFallback();
         });
     } catch (err) {
-      console.warn("Reverse geocoding initiation failed:", err);
-      setScenicSpot(null);
+      console.warn("Overpass fetch setup failed:", err);
+      triggerNominatimFallback();
     }
   }, [userLocation]);
 
@@ -1842,7 +1910,7 @@ function MoodStep({
 }: {
   selected: Mood | null;
   onSelect: (m: Mood) => void;
-  scenicSpot: { name: string } | null;
+  scenicSpot: { name: string; isPark: boolean; parkName: string } | null;
   onLaunchScenic: () => void;
 }) {
   return (
@@ -1863,13 +1931,17 @@ function MoodStep({
             </div>
             <div className="space-y-0.5 text-left min-w-0 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                Scenic Spot Detected
+                {scenicSpot.isPark ? "Park Detected Nearby" : "Scenic Spot Detected"}
               </span>
               <p className="text-xs font-semibold leading-relaxed text-foreground/95 break-words">
-                Looks like you are in {scenicSpot.name}!
+                {scenicSpot.isPark
+                  ? `Seems there is a park nearby (${scenicSpot.parkName || "Beautiful Park"})!`
+                  : `Looks like you are in ${scenicSpot.name}!`}
               </p>
               <p className="text-[10px] text-muted-foreground/80 leading-tight">
-                Tap "Launch Trail" to start a nature-tuned scenic loop trail around the area.
+                {scenicSpot.isPark
+                  ? "Seems there is a park nearby, do you want to choose a trail in the park?"
+                  : 'Tap "Launch Trail" to start a nature-tuned scenic loop trail around the area.'}
               </p>
             </div>
             <button
