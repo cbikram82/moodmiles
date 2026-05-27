@@ -647,11 +647,12 @@ function MoodMiles() {
   }, [mood, user]);
 
   // User Preferences
-  const [mapTheme, setMapTheme] = useState<"real" | "cyberpunk">(() => {
+  const [mapTheme, setMapTheme] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("moodmiles_map_theme") as "real" | "cyberpunk") || "real";
+      const saved = localStorage.getItem("moodmiles_map_theme");
+      return saved === "real" ? "dark" : (saved || "dark");
     }
-    return "real";
+    return "dark";
   });
   const [walkingSpeed, setWalkingSpeed] = useState<"slow" | "normal" | "brisk">(() => {
     if (typeof window !== "undefined") {
@@ -819,6 +820,7 @@ function MoodMiles() {
               onOpenSettings={() => setSettingsOpen(true)}
               onStart={() => setStep("active")}
               routeVariant={routeVariant}
+              setRouteVariant={setRouteVariant}
             />
           )}
           {step === "active" && route && mood && duration && activity && (
@@ -903,33 +905,31 @@ function MoodMiles() {
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Map Rendering Theme
                 </span>
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-background/40 p-1 border border-border/60">
-                  <button
-                    onClick={() => {
-                      setMapTheme("real");
-                      localStorage.setItem("moodmiles_map_theme", "real");
-                    }}
-                    className={`rounded-lg py-2 text-xs font-medium transition ${
-                      mapTheme === "real"
-                        ? "bg-gradient-to-r from-accent to-primary text-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Street Map
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMapTheme("cyberpunk");
-                      localStorage.setItem("moodmiles_map_theme", "cyberpunk");
-                    }}
-                    className={`rounded-lg py-2 text-xs font-medium transition ${
-                      mapTheme === "cyberpunk"
-                        ? "bg-gradient-to-r from-accent to-primary text-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Cyberpunk Grid
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "dark", label: "Dark Explorer" },
+                    { id: "street", label: "Light Street" },
+                    { id: "terrain", label: "Terrain Relief" },
+                    { id: "cyberpunk", label: "Cyberpunk Grid" },
+                  ].map((theme) => {
+                    const active = mapTheme === theme.id || (theme.id === "dark" && mapTheme === "real");
+                    return (
+                      <button
+                        key={theme.id}
+                        onClick={() => {
+                          setMapTheme(theme.id);
+                          localStorage.setItem("moodmiles_map_theme", theme.id);
+                        }}
+                        className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center justify-center cursor-pointer ${
+                          active
+                            ? "border-primary/60 bg-gradient-to-br from-accent/15 to-primary/15 text-foreground"
+                            : "border-border/60 bg-background/30 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <span className="text-xs font-semibold">{theme.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2125,12 +2125,13 @@ function RouteScreen({
   onOpenSettings,
   onStart,
   routeVariant,
+  setRouteVariant,
 }: {
   route: (typeof ROUTES)[Mood];
   mood: Mood;
   duration: Duration;
   activity: Activity;
-  mapTheme: "real" | "cyberpunk";
+  mapTheme: string;
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
   userLocation: { lat: number; lng: number } | null;
@@ -2144,6 +2145,7 @@ function RouteScreen({
   onOpenSettings: () => void;
   onStart: () => void;
   routeVariant: number;
+  setRouteVariant: React.Dispatch<React.SetStateAction<number>>;
 }) {
   const currentVariant = useMemo(
     () => route.variants[routeVariant] || route.variants[0],
@@ -2206,6 +2208,7 @@ function RouteScreen({
         locationName={locationName}
         setLocationName={setLocationName}
         routeVariant={routeVariant}
+        prompt={currentVariant.prompt}
       />
 
       <p className="text-[15px] leading-relaxed text-foreground/85">{route.summary}</p>
@@ -2251,13 +2254,22 @@ function RouteScreen({
         </Button>
       )}
 
-      <Button
-        onClick={onStart}
-        className="h-14 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-base font-medium text-background shadow-lg shadow-primary/20 hover:opacity-95"
-      >
-        <Play className="mr-1 h-4 w-4 fill-background" />
-        Start
-      </Button>
+      <div className="flex gap-3">
+        <Button
+          onClick={() => setRouteVariant((prev) => (prev + 1) % 4)}
+          className="h-14 flex-1 rounded-2xl border border-border bg-card/40 hover:bg-accent/10 text-foreground text-sm font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <RefreshCw className="h-4 w-4 text-primary animate-spin-slow" />
+          Rotate Loop
+        </Button>
+        <Button
+          onClick={onStart}
+          className="h-14 flex-[2] rounded-2xl bg-gradient-to-r from-accent to-primary text-base font-medium text-background shadow-lg shadow-primary/20 hover:opacity-95 flex items-center justify-center gap-1.5"
+        >
+          <Play className="h-4 w-4 fill-background" />
+          Start Journey
+        </Button>
+      </div>
     </section>
   );
 }
@@ -2923,6 +2935,7 @@ function ActiveScreen({
         locationName={locationName}
         setLocationName={setLocationName}
         routeVariant={routeVariant}
+        prompt={currentVariant.prompt}
       />
 
       {/* Primary Metrics Grid */}

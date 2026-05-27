@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Compass } from "lucide-react";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 
 type Mood =
   | "Calm"
@@ -23,7 +24,7 @@ interface MoodMapProps {
   mood: Mood;
   duration: Duration;
   activity: Activity;
-  mapTheme: "real" | "cyberpunk";
+  mapTheme: string;
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
   liveTracking?: boolean;
@@ -36,10 +37,33 @@ interface MoodMapProps {
   locationName: string;
   setLocationName: (name: string) => void;
   routeVariant?: number;
+  prompt?: string;
 }
 
 // Default backup coordinates (London Hyde Park area)
 const DEFAULT_COORDS: LatLng = { lat: 51.5074, lng: -0.1278 };
+
+// Spoken mindfulness audio guide using standard SpeechSynthesis (webview-native supported)
+function speakMindfulnessCue(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.92; // meditational pace
+    utterance.pitch = 1.0;
+    
+    const voices = window.speechSynthesis.getVoices();
+    const naturalVoice = voices.find(v => v.lang.startsWith("en") && v.name.includes("Natural")) || 
+                         voices.find(v => v.lang.startsWith("en"));
+    if (naturalVoice) {
+      utterance.voice = naturalVoice;
+    }
+    
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn("SpeechSynthesis error:", err);
+  }
+}
 
 // Haversine formula to compute distance in km between two GPS coordinates
 function haversineDistance(p1: LatLng, p2: LatLng): number {
@@ -73,6 +97,7 @@ export function MoodMap({
   locationName,
   setLocationName,
   routeVariant = 0,
+  prompt,
 }: MoodMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,6 +117,9 @@ export function MoodMap({
   const [liveLocation, setLiveLocation] = useState<LatLng | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<LatLng[]>([]);
   const [cumulativeDistance, setCumulativeDistance] = useState<number>(0);
+
+  const lastSpokenMilestoneDistanceRef = useRef<number>(0);
+  const lastWaypointHapticIndexRef = useRef<number>(-1);
 
   // Helper to calculate km/h based on user-configured speeds
   const getSpeedKmh = (): number => {
@@ -177,6 +205,16 @@ export function MoodMap({
                 setCumulativeDistance((prevDist) => {
                   const updated = prevDist + dist;
                   onDistanceChange?.(updated);
+                  
+                  // Milestone announcements every 0.5 km
+                  if (updated - lastSpokenMilestoneDistanceRef.current >= 0.5) {
+                    const nextMilestone = Math.floor(updated * 2) / 2;
+                    if (nextMilestone > lastSpokenMilestoneDistanceRef.current) {
+                      lastSpokenMilestoneDistanceRef.current = nextMilestone;
+                      speakMindfulnessCue(`You have completed ${nextMilestone.toFixed(1)} kilometers.`);
+                    }
+                  }
+                  
                   return updated;
                 });
               }
@@ -304,7 +342,7 @@ export function MoodMap({
 
   // Clean up Leaflet map instance dynamically when switching themes or loading
   useEffect(() => {
-    if (mapTheme !== "real" || loading || !routeCenter) {
+    if (mapTheme === "cyberpunk" || loading || !routeCenter) {
       if (mapInstanceRef.current) {
         try {
           mapInstanceRef.current.remove();
@@ -322,7 +360,7 @@ export function MoodMap({
 
   // 4. Initialize Map (Leaflet) & Draw planned route + Breadcrumbs
   useEffect(() => {
-    if (!L || loading || !routeCenter || mapTheme !== "real" || !mapContainerRef.current) return;
+    if (!L || loading || !routeCenter || mapTheme === "cyberpunk" || !mapContainerRef.current) return;
 
     // A. Recreate map base if it doesn't exist
     if (!mapInstanceRef.current) {
@@ -334,8 +372,20 @@ export function MoodMap({
       });
       mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        maxZoom: 20,
+      let tileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+      let maxZoom = 20;
+
+      if (mapTheme === "street") {
+        tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      } else if (mapTheme === "terrain") {
+        tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
+        maxZoom = 18;
+      } else if (mapTheme === "real" || mapTheme === "dark") {
+        tileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+      }
+
+      L.tileLayer(tileUrl, {
+        maxZoom,
       }).addTo(map);
 
       // Add map click listener to drop pins in planning mode
@@ -520,6 +570,28 @@ export function MoodMap({
 
     // B. LIVE ROUTE & GPS RENDERING (React state ticks)
     if (liveTracking && liveLocation) {
+      // Check proximity to planned loop waypoints for haptic & spoken guidance
+      const waypoints = getLoopWaypoints(routeCenter);
+      for (let i = 0; i < waypoints.length; i++) {
+        if (i <= lastWaypointHapticIndexRef.current) continue;
+        const distToWp = haversineDistance(liveLocation, waypoints[i]);
+        if (distToWp <= 0.015) { // 15 meters
+          lastWaypointHapticIndexRef.current = i;
+          try {
+            Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {});
+            setTimeout(() => {
+              Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {});
+            }, 180);
+          } catch {
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate([100, 50, 100]);
+            }
+          }
+          speakMindfulnessCue(`Way-point ${i + 1} reached. You are on the right track!`);
+          break;
+        }
+      }
+
       const liveIcon = L.divIcon({
         className: "custom-live-marker",
         html: `
@@ -569,6 +641,30 @@ export function MoodMap({
       }
     };
   }, []);
+
+  // Welcome and Periodic Mindfulness Speaking Effect
+  useEffect(() => {
+    if (!liveTracking) {
+      lastSpokenMilestoneDistanceRef.current = 0;
+      lastWaypointHapticIndexRef.current = -1;
+      return;
+    }
+
+    const welcomeMsg = `Starting your ${mood} journey. Let's find a comfortable ${activity.toLowerCase()}ing pace.`;
+    speakMindfulnessCue(welcomeMsg);
+
+    if (!prompt) return;
+    const interval = setInterval(() => {
+      speakMindfulnessCue(prompt);
+    }, 300000); // 5 minutes
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [liveTracking, mood, activity, prompt]);
 
   // 5. Procedural Cyberpunk/Glow Canvas Map Render with live walk simulation
   useEffect(() => {
