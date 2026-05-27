@@ -473,7 +473,7 @@ function useScenicDetector(
               let detectedPark = parkName;
               if (!detectedPark && data.display_name) {
                 const parts = data.display_name.split(", ");
-                const parkSegment = parts.find((part) =>
+                const parkSegment = parts.find((part: string) =>
                   /\b(park|common|garden|wood|reserve|forest|meadow|heath|field|downs|lawn|recreation)\b/i.test(
                     part,
                   ),
@@ -2754,7 +2754,7 @@ interface ActiveScreenProps {
   mood: Mood;
   duration: Duration;
   activity: Activity;
-  mapTheme: "real" | "cyberpunk";
+  mapTheme: string;
   walkingSpeed: "slow" | "normal" | "brisk";
   runningSpeed: "jog" | "fast" | "sprint";
   onComplete: (data: JourneyData) => void;

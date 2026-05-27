@@ -10,7 +10,8 @@ type Mood =
   | "Escape"
   | "Confidence"
   | "Recovery"
-  | "Creative Spark";
+  | "Creative Spark"
+  | "Nature Connection";
 
 type Duration = 15 | 30 | 45 | 60;
 type Activity = "Walk" | "Run";
@@ -368,23 +369,21 @@ export function MoodMap({
     setRouteCenter(null); // Triggers GPS retrieval effect
   };
 
-  // Clean up Leaflet map instance dynamically when switching themes or loading
+  // Clean up Leaflet map instance dynamically when switching themes, loading, or changing routes/rotations
   useEffect(() => {
-    if (mapTheme === "cyberpunk" || loading || !routeCenter) {
-      if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current.remove();
-        } catch (e) {
-          console.warn("Leaflet map cleanup warning: ", e);
-        }
-        mapInstanceRef.current = null;
-        polylineRef.current = null;
-        markersRef.current = [];
-        liveMarkerRef.current = null;
-        liveBreadcrumbsPolylineRef.current = null;
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch (e) {
+        console.warn("Leaflet map cleanup warning: ", e);
       }
+      mapInstanceRef.current = null;
+      polylineRef.current = null;
+      markersRef.current = [];
+      liveMarkerRef.current = null;
+      liveBreadcrumbsPolylineRef.current = null;
     }
-  }, [mapTheme, loading, routeCenter]);
+  }, [mapTheme, loading, routeCenter, routeVariant]);
 
   // 4. Initialize Map (Leaflet) & Draw planned route + Breadcrumbs
   useEffect(() => {
@@ -674,7 +673,7 @@ export function MoodMap({
       // Pan to the user's active GPS coordinate to keep them centered
       map.panTo([liveLocation.lat, liveLocation.lng], { animate: true });
     }
-  }, [L, loading, routeCenter, mapTheme, breadcrumbs, liveTracking, liveLocation]);
+  }, [L, loading, routeCenter, mapTheme, breadcrumbs, liveTracking, liveLocation, routeVariant]);
 
   // Cleanup map container fully on unmount
   useEffect(() => {
@@ -954,6 +953,7 @@ export function MoodMap({
     walkingSpeed,
     runningSpeed,
     liveTracking,
+    routeVariant,
   ]);
 
   if (loading) {

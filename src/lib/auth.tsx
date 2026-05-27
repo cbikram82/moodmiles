@@ -160,24 +160,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseConfigured || !user) return;
 
-    supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          display_name: user.user_metadata?.full_name ?? null,
-          avatar_url: user.user_metadata?.avatar_url ?? null,
-        },
-        { onConflict: "id" },
-      )
-      .then(({ error }) => {
+    const upsertProfile = async () => {
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .upsert(
+            {
+              id: user.id,
+              display_name: user.user_metadata?.full_name ?? null,
+              avatar_url: user.user_metadata?.avatar_url ?? null,
+            },
+            { onConflict: "id" },
+          );
         if (error) {
           console.error("Profile upsert error:", error.message);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Profile upsert exception:", err);
-      });
+      }
+    };
+
+    upsertProfile();
   }, [user]);
 
   return (
