@@ -559,20 +559,29 @@ function useScenicDetector(
         })
         .then((data) => {
           if (data && data.elements && data.elements.length > 0) {
-            // Find the first park object with a name tag
-            const parkWithName = data.elements.find((el: any) => el.tags && el.tags.name);
-            if (parkWithName) {
-              const name = parkWithName.tags.name;
-              // Resolve coordinate: node has .lat/.lon, way/relation has .center.lat/.center.lon via 'out center'
-              const parkLat = parkWithName.lat || (parkWithName.center && parkWithName.center.lat);
-              const parkLng = parkWithName.lon || (parkWithName.center && parkWithName.center.lon);
+            // Map elements and compute direct distances to find the closest park to the user
+            const elementsWithDist = data.elements.map((el: any) => {
+              const elLat = el.lat || (el.center && el.center.lat) || userLocation.lat;
+              const elLng = el.lon || (el.center && el.center.lon) || userLocation.lng;
+              const dist = calculateDistanceMiles(userLocation.lat, userLocation.lng, elLat, elLng);
+              return { ...el, dist, elLat, elLng };
+            });
+
+            // Filter for elements with valid names and sort by proximity (closest first)
+            const sortedParks = elementsWithDist
+              .filter((el: any) => el.tags && el.tags.name)
+              .sort((a: any, b: any) => a.dist - b.dist);
+
+            if (sortedParks.length > 0) {
+              const closestPark = sortedParks[0];
+              const name = closestPark.tags.name;
 
               setScenicSpot({
                 name: name,
                 isPark: true,
                 parkName: name,
-                lat: parkLat !== undefined ? parkLat : userLocation.lat,
-                lng: parkLng !== undefined ? parkLng : userLocation.lng,
+                lat: closestPark.elLat,
+                lng: closestPark.elLng,
               });
               return;
             }

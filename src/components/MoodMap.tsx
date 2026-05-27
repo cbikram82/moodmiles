@@ -307,9 +307,13 @@ export function MoodMap({
     const totalDistanceKm = speedKmh * (duration / 60);
     const sideKm = totalDistanceKm / 4;
 
-    const latOffset = sideKm / 111;
+    // Scale down loop offsets for "Nature Connection" loops to keep them compact (e.g. ~150-250m radius) so they stay within the park trails
+    const isNatureLoop = mood === "Nature Connection";
+    const scale = isNatureLoop ? 0.28 : 1.0;
+
+    const latOffset = (sideKm / 111) * scale;
     const radLat = (start.lat * Math.PI) / 180;
-    const lngOffset = sideKm / (111 * Math.cos(radLat));
+    const lngOffset = (sideKm / (111 * Math.cos(radLat))) * scale;
 
     const rawOffsets: { lat: number; lng: number }[] = [];
 
@@ -510,7 +514,10 @@ export function MoodMap({
     const waypoints = getLoopWaypoints(routeCenter);
     const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
     const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true`;
+    
+    // Snapping & Winding loop optimizations: continue_straight=false allows winding trails and U-turns.
+    // radiuses=all allows unlimited snapping to the nearest walkable path/trail inside parks.
+    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true&continue_straight=false&radiuses=${fullCoordinates.map(() => "all").join(";")}`;
 
     // Static Custom Start Pin
     const startIcon = L.divIcon({
