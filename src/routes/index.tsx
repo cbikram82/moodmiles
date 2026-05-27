@@ -468,6 +468,19 @@ function MoodMiles() {
     setRouteVariant(0);
   };
 
+  const handleReWalk = (j: JourneyRecord) => {
+    setMood(j.mood as Mood);
+    setDuration(j.duration as Duration);
+    setActivity(j.activity as Activity);
+    setRouteVariant(j.route_variant || 0);
+    if (j.breadcrumbs && j.breadcrumbs.length > 0) {
+      setUserLocation(j.breadcrumbs[0]);
+      setUsingCustomLocation(true);
+      setLocationName("Re-walk Start Point");
+    }
+    setStep("route");
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden">
       {/* Ambient gradient backdrop */}
@@ -493,6 +506,7 @@ function MoodMiles() {
               user={user}
               authLoading={authLoading}
               onSignIn={signInWithGoogle}
+              onReWalk={handleReWalk}
             />
           )}
           {step === "mood" && (
@@ -852,19 +866,129 @@ function Header({
   );
 }
 
+function MiniJourneyMap({ breadcrumbs }: { breadcrumbs: { lat: number; lng: number }[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || breadcrumbs.length < 1 || !containerRef.current) return;
+
+    let map: any = null;
+
+    import("leaflet").then((L) => {
+      if (!containerRef.current || mapRef.current) return;
+
+      map = L.map(containerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        touchZoom: false,
+        boxZoom: false,
+        keyboard: false,
+      });
+      mapRef.current = map;
+
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        { maxZoom: 20 }
+      ).addTo(map);
+
+      const pathCoords = breadcrumbs.map((pt) => [pt.lat, pt.lng]) as any[];
+      const polyline = L.polyline(pathCoords, {
+        color: "#06b6d4",
+        weight: 3.5,
+        opacity: 0.9,
+        lineJoin: "round",
+      }).addTo(map);
+
+      // Add a small emerald dot for starting point
+      const startIcon = L.divIcon({
+        className: "mini-start-marker",
+        html: `<div style="height: 6px; width: 6px; border-radius: 9999px; background-color: #10b981; border: 1.5px solid #ffffff; box-shadow: 0 0 6px #10b981;"></div>`,
+        iconSize: [8, 8],
+        iconAnchor: [4, 4],
+      });
+      L.marker(pathCoords[0], { icon: startIcon }).addTo(map);
+
+      map.fitBounds(polyline.getBounds(), { padding: [10, 10] });
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [breadcrumbs]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-28 w-full rounded-xl border border-border/40 bg-background shadow-inner overflow-hidden"
+    />
+  );
+}
+
+function CircularProgressRing({
+  percent,
+  size = 52,
+  strokeWidth = 4,
+  color = "stroke-primary",
+}: {
+  percent: number;
+  size?: number;
+  strokeWidth?: number;
+  color?: string;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percent / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="rotate-[-90deg] shrink-0">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="transparent"
+        stroke="rgba(255, 255, 255, 0.05)"
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="transparent"
+        stroke="currentColor"
+        className={`${color} transition-all duration-500 ease-out`}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function Landing({
   onStart,
   user,
   authLoading,
   onSignIn,
+  onReWalk,
 }: {
   onStart: () => void;
   user: import("@supabase/supabase-js").User | null;
   authLoading: boolean;
   onSignIn: () => Promise<void>;
+  onReWalk: (journey: JourneyRecord) => void;
 }) {
   const [journeys, setJourneys] = useState<JourneyRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [activeTab, setActiveTab] = useState<"history" | "analytics" | "milestones">("history");
+  const [expandedJourneyId, setExpandedJourneyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -906,6 +1030,125 @@ function Landing({
     return "text-muted-foreground";
   };
 
+  // Dynamic Shift Analytics Engine
+  const shiftStats = useMemo(() => {
+    const stats: Record<string, { better: number; same: number; worse: number; total: number }> = {};
+    journeys.forEach((j) => {
+      if (!j.mood) return;
+      if (!stats[j.mood]) {
+        stats[j.mood] = { better: 0, same: 0, worse: 0, total: 0 };
+      }
+      stats[j.mood].total += 1;
+      if (j.post_feeling === "Better") stats[j.mood].better += 1;
+      else if (j.post_feeling === "Same") stats[j.mood].same += 1;
+      else if (j.post_feeling === "Worse") stats[j.mood].worse += 1;
+    });
+    return stats;
+  }, [journeys]);
+
+  // Mood Catalysts Solver
+  const catalyst = useMemo(() => {
+    if (journeys.length === 0) return null;
+    const combos: Record<
+      string,
+      { better: number; total: number; duration: number; activity: string; variant: number }
+    > = {};
+
+    journeys.forEach((j) => {
+      const key = `${j.activity}-${j.duration}-${j.route_variant || 0}`;
+      if (!combos[key]) {
+        combos[key] = {
+          better: 0,
+          total: 0,
+          duration: j.duration,
+          activity: j.activity,
+          variant: j.route_variant || 0,
+        };
+      }
+      combos[key].total += 1;
+      if (j.post_feeling === "Better") combos[key].better += 1;
+    });
+
+    const sorted = Object.values(combos).sort((a, b) => {
+      const pctA = a.better / a.total;
+      const pctB = b.better / b.total;
+      if (pctA !== pctB) return pctB - pctA;
+      return b.better - a.better;
+    });
+
+    const best = sorted[0];
+    if (!best || best.better === 0) return null;
+
+    const variantName = best.variant === 1 ? "Labyrinth" : best.variant === 2 ? "Infinity" : "Default";
+    return `Your fastest emotional lift happens during ${best.duration}-minute ${best.activity.toLowerCase()}s walking the ${variantName} loop.`;
+  }, [journeys]);
+
+  // Mindfulness Milestones Computations
+  const calmSteps = useMemo(() => {
+    return journeys
+      .filter((j) => j.mood === "Calm" || j.mood === "Recovery")
+      .reduce((sum, j) => sum + (j.steps || 0), 0);
+  }, [journeys]);
+
+  const energyMiles = useMemo(() => {
+    const energyKm = journeys
+      .filter((j) => j.mood === "Energy Boost" || j.mood === "Confidence")
+      .reduce((sum, j) => sum + (Number(j.distance_km) || 0), 0);
+    return energyKm * 0.621371; // km to miles
+  }, [journeys]);
+
+  const windingWalks = useMemo(() => {
+    return journeys.filter((j) => (j.route_variant || 0) > 0).length;
+  }, [journeys]);
+
+  const last7Days = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      days.push(d);
+    }
+    return days;
+  }, []);
+
+  const weeklyData = useMemo(() => {
+    const data = last7Days.map((day) => {
+      const dayWalks = journeys.filter((j) => {
+        const walkDate = new Date(j.completed_at);
+        return (
+          walkDate.getDate() === day.getDate() &&
+          walkDate.getMonth() === day.getMonth() &&
+          walkDate.getFullYear() === day.getFullYear()
+        );
+      });
+
+      const totalSteps = dayWalks.reduce((sum, j) => sum + (j.steps || 0), 0);
+
+      const moodScores = dayWalks
+        .map((j) => {
+          if (j.post_feeling === "Better") return 100;
+          if (j.post_feeling === "Same") return 50;
+          if (j.post_feeling === "Worse") return 0;
+          return null;
+        })
+        .filter((score) => score !== null) as number[];
+
+      const avgMoodScore = moodScores.length > 0 ? moodScores.reduce((sum, s) => sum + s, 0) / moodScores.length : 0;
+
+      return {
+        label: day.toLocaleDateString("en-GB", { weekday: "short" }),
+        steps: totalSteps,
+        moodScore: avgMoodScore,
+        count: dayWalks.length,
+      };
+    });
+
+    const maxSteps = Math.max(...data.map((d) => d.steps), 5000);
+
+    return { data, maxSteps };
+  }, [journeys, last7Days]);
+
   return (
     <section className="flex h-full flex-col items-center justify-between pt-10 text-center">
       <div className="space-y-8">
@@ -920,7 +1163,7 @@ function Landing({
           <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
             MoodMiles
           </p>
-          <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight">
+          <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight text-foreground">
             Walk how you want to feel.
           </h1>
           <p className="mx-auto max-w-xs text-balance text-sm leading-relaxed text-muted-foreground">
@@ -942,7 +1185,7 @@ function Landing({
         {!user && !authLoading && (
           <button
             onClick={onSignIn}
-            className="mx-auto flex items-center gap-2 rounded-full border border-border/60 bg-card/50 px-4 py-2 text-xs text-muted-foreground backdrop-blur transition hover:text-foreground hover:border-border"
+            className="mx-auto flex items-center gap-2 rounded-full border border-border/60 bg-card/50 px-4 py-2 text-xs text-muted-foreground backdrop-blur transition hover:text-foreground hover:border-border cursor-pointer"
           >
             <LogIn className="h-3.5 w-3.5" />
             Sign in with Google to save journeys
@@ -950,7 +1193,7 @@ function Landing({
         )}
 
         {user && (
-          <p className="text-center text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+          <p className="text-center text-[11px] text-muted-foreground flex items-center justify-center gap-1.5 font-medium">
             <Check className="h-3 w-3 text-emerald-400" />
             Signed in as {user.user_metadata?.full_name || user.email}
           </p>
@@ -958,92 +1201,421 @@ function Landing({
 
         {!user && authLoading && (
           <p className="text-center text-[11px] text-muted-foreground">
-            Takes less than 30 seconds
+            Connecting...
           </p>
         )}
       </div>
 
-      {/* Journey History */}
+      {/* Interactive Tabs Dashboard Section */}
       {user && (
-        <div className="mt-8 w-full space-y-3 text-left">
-          <div className="flex items-center gap-2 px-1">
-            <History className="h-4 w-4 text-accent" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              My Journeys
-            </span>
-            {journeys.length > 0 && (
-              <span className="ml-auto text-[10px] text-muted-foreground/60">
-                {journeys.length} total
-              </span>
-            )}
+        <div className="mt-10 w-full text-left space-y-5">
+          {/* Tabs bar */}
+          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-card/55 p-1 border border-border/50 backdrop-blur-md shadow-sm">
+            {(["history", "analytics", "milestones"] as const).map((tab) => {
+              const label = tab === "history" ? "My Walks" : tab === "analytics" ? "Mood Analytics" : "Milestones";
+              const Icon = tab === "history" ? History : tab === "analytics" ? TrendingUp : Trophy;
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[11px] font-semibold tracking-wide transition cursor-pointer ${
+                    active
+                      ? "bg-gradient-to-r from-accent to-primary text-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/15"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{label}</span>
+                  <span className="sm:hidden">{tab === "history" ? "Walks" : tab === "analytics" ? "Moods" : "Badges"}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {loadingHistory && (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
+          {/* TAB 1: HISTORY (GPS Recall Drawer) */}
+          {activeTab === "history" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <History className="h-4 w-4 text-accent" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  History Log
+                </span>
+                {journeys.length > 0 && (
+                  <span className="ml-auto text-[10px] text-muted-foreground/60">
+                    {journeys.length} total
+                  </span>
+                )}
+              </div>
 
-          {!loadingHistory && journeys.length === 0 && (
-            <div className="rounded-2xl border border-border/60 bg-card/40 p-5 backdrop-blur text-center">
-              <p className="text-xs text-muted-foreground">
-                No journeys yet. Complete your first walk to see it here.
-              </p>
-            </div>
-          )}
+              {loadingHistory && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
 
-          {!loadingHistory && journeys.length > 0 && (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {journeys.map((j) => (
-                <div
-                  key={j.id}
-                  className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur space-y-2"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {j.route_title}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(j.completed_at)}
-                      </div>
-                    </div>
-                    {j.post_feeling && (
-                      <span
-                        className={`text-[10px] font-semibold uppercase tracking-wider shrink-0 ${feelingColor(j.post_feeling)}`}
+              {!loadingHistory && journeys.length === 0 && (
+                <div className="rounded-2xl border border-border/60 bg-card/40 p-6 backdrop-blur text-center">
+                  <p className="text-xs text-muted-foreground">
+                    No journeys recorded yet. Complete your first loop to start tracking.
+                  </p>
+                </div>
+              )}
+
+              {!loadingHistory && journeys.length > 0 && (
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {journeys.map((j) => {
+                    const isExpanded = expandedJourneyId === j.id;
+                    const matchedRoute = ROUTES[j.mood as Mood];
+                    const currentVariant = matchedRoute?.variants[j.route_variant || 0] || matchedRoute?.variants[0];
+                    const promptText = currentVariant?.prompt || "Focus on the rhythm of your strides.";
+
+                    return (
+                      <div
+                        key={j.id}
+                        onClick={() => setExpandedJourneyId(isExpanded ? null : j.id)}
+                        className={`rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur transition-all duration-300 cursor-pointer hover:border-border/80 ${
+                          isExpanded ? "border-primary/50 bg-card/60 shadow-md" : ""
+                        }`}
                       >
-                        {j.post_feeling}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-semibold truncate text-foreground/95">
+                              {j.route_title}
+                            </h3>
+                            <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
+                              <Clock className="h-3 w-3" />
+                              {formatDate(j.completed_at)}
+                            </div>
+                          </div>
+                          {j.post_feeling && (
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${feelingColor(j.post_feeling)}`}
+                            >
+                              {j.post_feeling}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 text-[10px] flex-wrap mt-2.5">
+                          <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5 text-foreground/80 font-medium">
+                            {j.mood}
+                          </span>
+                          <span className="text-muted-foreground font-semibold">
+                            {formatDuration(j.elapsed_seconds)}
+                          </span>
+                          <span className="text-muted-foreground font-semibold">
+                            {Number(j.distance_km).toFixed(2)} km
+                          </span>
+                          {j.steps !== undefined && j.steps !== null && (
+                            <span className="text-muted-foreground font-semibold flex items-center gap-0.5">
+                              <Footprints className="h-3 w-3 text-emerald-400 shrink-0" />
+                              {j.steps.toLocaleString()}
+                            </span>
+                          )}
+                          {j.route_variant !== undefined && j.route_variant !== null && j.route_variant > 0 && (
+                            <span className="rounded-full border border-accent/30 bg-accent/15 text-accent font-semibold px-2 py-0.5 text-[9px]">
+                              {j.route_variant === 1 ? "Labyrinth" : "Infinity"}
+                            </span>
+                          )}
+                          <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5 text-foreground/80 font-medium ml-auto">
+                            {j.activity}
+                          </span>
+                        </div>
+
+                        {/* Expandable Mini Map Drawer / Accordion */}
+                        {isExpanded && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="pt-3.5 border-t border-border/40 mt-3.5 space-y-3.5 animate-in slide-in-from-top-2 duration-300"
+                          >
+                            {j.breadcrumbs && j.breadcrumbs.length > 1 ? (
+                              <MiniJourneyMap breadcrumbs={j.breadcrumbs} />
+                            ) : (
+                              <div className="h-28 w-full rounded-xl border border-border/40 bg-background/20 flex flex-col items-center justify-center text-[10px] text-muted-foreground">
+                                <MapPin className="h-5 w-5 text-muted-foreground/35 mb-1" />
+                                No GPS trail recorded
+                              </div>
+                            )}
+
+                            <div className="rounded-xl bg-background/35 p-3 border border-border/40 space-y-1">
+                              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider text-muted-foreground font-bold">
+                                <Quote className="h-3 w-3" />
+                                Mindful Meditation Focus
+                              </div>
+                              <p className="text-xs italic text-foreground/90 leading-relaxed">
+                                "{promptText}"
+                              </p>
+                            </div>
+
+                            <Button
+                              onClick={() => onReWalk(j)}
+                              className="w-full h-10.5 rounded-xl bg-gradient-to-r from-accent to-primary text-xs font-semibold text-background hover:opacity-95 shadow transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Navigation className="h-3.5 w-3.5 fill-background animate-pulse" />
+                              Re-walk This Trail (Recall GPS)
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: ANALYTICS (Mood Shift Heatmap & Catalyst Highlights) */}
+          {activeTab === "analytics" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <TrendingUp className="h-4 w-4 text-accent" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Mood Shift Matrix
+                </span>
+              </div>
+
+              {/* Mood Catalyst Discovery Header */}
+              {catalyst && (
+                <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-accent/15 via-primary/10 to-chart-3/10 p-4.5 shadow-sm shadow-primary/5 animate-in fade-in duration-300">
+                  <div className="absolute inset-0 -z-10 animate-pulse bg-gradient-to-tr from-accent/5 to-transparent blur-xl" />
+                  <div className="flex gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30">
+                      <Sparkles className="h-4.5 w-4.5 text-primary" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-primary">
+                        Your Mood Catalyst
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] flex-wrap">
-                    <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
-                      {j.mood}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {formatDuration(j.elapsed_seconds)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {Number(j.distance_km).toFixed(2)} km
-                    </span>
-                    {j.steps !== undefined && j.steps !== null && (
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Footprints className="h-3.5 w-3.5 text-emerald-400" />
-                        {j.steps.toLocaleString()} steps
-                      </span>
-                    )}
-                    {j.route_variant !== undefined && j.route_variant !== null && j.route_variant > 0 && (
-                      <span className="rounded-full border border-accent/30 bg-accent/15 text-accent font-semibold px-2 py-0.5 text-[10px]">
-                        {j.route_variant === 1 ? "Labyrinth" : "Infinity"}
-                      </span>
-                    )}
-                    <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5">
-                      {j.activity}
-                    </span>
+                      <p className="text-xs font-semibold leading-relaxed text-foreground/95">
+                        {catalyst}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Shift matrix bars */}
+              {Object.keys(shiftStats).length === 0 ? (
+                <div className="rounded-2xl border border-border/60 bg-card/40 p-6 backdrop-blur text-center text-xs text-muted-foreground">
+                  Complete a few journeys with varying post-feelings to unlock detailed shift analytics.
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {Object.entries(shiftStats).map(([startMood, stats]) => {
+                    const betterPct = Math.round((stats.better / stats.total) * 100);
+                    const samePct = Math.round((stats.same / stats.total) * 100);
+                    const worsePct = Math.round((stats.worse / stats.total) * 100);
+
+                    return (
+                      <div
+                        key={startMood}
+                        className="rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur space-y-3.5 shadow-sm"
+                      >
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-xs font-bold text-foreground/90">{startMood} walks</span>
+                          <span className="text-[10px] text-muted-foreground font-semibold">
+                            {stats.total} total {stats.total === 1 ? "journey" : "journeys"}
+                          </span>
+                        </div>
+
+                        {/* Multi-Segmented Custom Heatbar */}
+                        <div className="h-2.5 w-full rounded-full bg-muted-foreground/5 flex overflow-hidden border border-border/40">
+                          {stats.better > 0 && (
+                            <div style={{ width: `${betterPct}%` }} className="h-full bg-emerald-400 shadow-sm" />
+                          )}
+                          {stats.same > 0 && (
+                            <div style={{ width: `${samePct}%` }} className="h-full bg-amber-400 shadow-sm" />
+                          )}
+                          {stats.worse > 0 && (
+                            <div style={{ width: `${worsePct}%` }} className="h-full bg-red-400 shadow-sm" />
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground/90 font-bold px-0.5">
+                          <span className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            Better: {betterPct}%
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            Same: {samePct}%
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                            Worse: {worsePct}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: MILESTONES (Mindfulness Rings & Step/Mood Progress Cadence) */}
+          {activeTab === "milestones" && (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 px-1">
+                <Trophy className="h-4 w-4 text-accent" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Weekly Dashboard & Milestones
+                </span>
+              </div>
+
+              {/* Steps vs Mood Weekly Progress Visual Chart */}
+              <div className="rounded-2xl border border-border/60 bg-card/40 p-5 backdrop-blur space-y-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Weekly Step Cadence & Mood Balance
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 pt-2 items-end h-44">
+                  {weeklyData.data.map((d, idx) => {
+                    const stepsHeight = (d.steps / weeklyData.maxSteps) * 100;
+                    const moodColor =
+                      d.moodScore >= 75
+                        ? "bg-emerald-400"
+                        : d.moodScore >= 40
+                          ? "bg-amber-400"
+                          : d.moodScore > 0
+                            ? "bg-red-400"
+                            : "bg-muted-foreground/10";
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col items-center gap-2 h-full justify-end group relative cursor-pointer"
+                      >
+                        {/* Tooltip on hover */}
+                        <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border/80 p-2.5 rounded-xl text-[10px] space-y-0.5 shadow-xl pointer-events-none z-50 w-24 text-center">
+                          <div className="font-bold text-foreground">{d.steps.toLocaleString()} steps</div>
+                          {d.count > 0 && (
+                            <div className={`${d.moodScore >= 75 ? "text-emerald-400" : "text-amber-400"} font-bold`}>
+                              {d.moodScore}% Mood Lift
+                            </div>
+                          )}
+                          {d.count === 0 && <div className="text-muted-foreground/60">No walks</div>}
+                        </div>
+
+                        {/* Chart Columns */}
+                        <div className="w-full bg-muted-foreground/5 rounded-t-lg relative h-full flex flex-col justify-end overflow-hidden border border-border/20">
+                          {d.steps > 0 && (
+                            <div
+                              style={{ height: `${stepsHeight}%` }}
+                              className="w-full bg-gradient-to-t from-primary/30 to-accent/60 rounded-t-md transition-all duration-500 ease-out"
+                            />
+                          )}
+
+                          {/* Mood Indicator Dot */}
+                          {d.count > 0 && (
+                            <div
+                              style={{ bottom: `${Math.min(stepsHeight, 90)}%` }}
+                              className={`absolute left-1/2 -translate-x-1/2 h-3.5 w-3.5 rounded-full border border-background shadow-md ${moodColor} transition-all duration-300 animate-in zoom-in`}
+                            />
+                          )}
+                        </div>
+
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          {d.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-center gap-4 text-[10px] text-muted-foreground/80 font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-5 bg-gradient-to-r from-primary/40 to-accent/80 rounded" />
+                    <span>Daily Steps</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 border border-background" />
+                    <span>Positive Mood Lift</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Achievements Milestone List */}
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {/* 1. Zen Stride */}
+                {(() => {
+                  const goal = 100000;
+                  const pct = Math.min((calmSteps / goal) * 100, 100);
+                  return (
+                    <div className="rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur flex items-center gap-4 shadow-sm">
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <CircularProgressRing percent={pct} color="text-emerald-400" />
+                        <div className="absolute text-[9px] font-bold text-foreground">
+                          {Math.round(pct)}%
+                        </div>
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-xs font-bold text-foreground truncate">Zen Stride</h4>
+                        <p className="text-[9px] text-emerald-400 uppercase tracking-wide font-bold">
+                          {calmSteps.toLocaleString()} / {goal.toLocaleString()} steps
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-snug">
+                          Total steps taken during Calm or Recovery sensory loops to ground your body.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 2. Spark Distance */}
+                {(() => {
+                  const goal = 50;
+                  const pct = Math.min((energyMiles / goal) * 100, 100);
+                  return (
+                    <div className="rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur flex items-center gap-4 shadow-sm">
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <CircularProgressRing percent={pct} color="text-cyan-400" />
+                        <div className="absolute text-[9px] font-bold text-foreground">
+                          {Math.round(pct)}%
+                        </div>
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-xs font-bold text-foreground truncate">Spark Distance</h4>
+                        <p className="text-[9px] text-cyan-400 uppercase tracking-wide font-bold">
+                          {energyMiles.toFixed(1)} / {goal.toLocaleString()} miles
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-snug">
+                          Total miles logged in Energy Boost or Confidence states to drive momentum.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 3. Winding Sage */}
+                {(() => {
+                  const goal = 10;
+                  const pct = Math.min((windingWalks / goal) * 100, 100);
+                  return (
+                    <div className="rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur flex items-center gap-4 shadow-sm">
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <CircularProgressRing percent={pct} color="text-accent" />
+                        <div className="absolute text-[9px] font-bold text-foreground">
+                          {Math.round(pct)}%
+                        </div>
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-xs font-bold text-foreground truncate">Winding Sage</h4>
+                        <p className="text-[9px] text-accent uppercase tracking-wide font-bold">
+                          {windingWalks} / {goal} walks
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-snug">
+                          Total walks completed with snaking Labyrinth or Centering Infinity loops.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>
