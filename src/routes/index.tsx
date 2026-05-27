@@ -1846,11 +1846,11 @@ function MoodStep({
               <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
                 Scenic Spot Detected
               </span>
-              <p className="text-xs font-semibold leading-relaxed text-foreground/95 truncate">
+              <p className="text-xs font-semibold leading-relaxed text-foreground/95 break-words">
                 Looks like you are in {scenicSpot.name}!
               </p>
               <p className="text-[10px] text-muted-foreground/80 leading-tight">
-                Tap below to launch a nature-tuned scenic loop trail around the area.
+                Tap "Launch Trail" to start a nature-tuned scenic loop trail around the area.
               </p>
             </div>
             <button
@@ -1881,9 +1881,7 @@ function MoodStep({
                 <Icon className="h-4 w-4" />
               </div>
               <div className="mt-2 min-w-0 w-full">
-                <div className="text-xs font-bold text-foreground leading-tight truncate">
-                  {label}
-                </div>
+                <div className="text-xs font-bold text-foreground leading-tight">{label}</div>
                 <div className="mt-1 text-[9px] leading-snug text-muted-foreground line-clamp-2">
                   {hint}
                 </div>
