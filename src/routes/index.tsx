@@ -88,21 +88,25 @@ const MOODS: { label: Mood; icon: React.ComponentType<{ className?: string }>; h
 
 const DURATIONS: Duration[] = [15, 30, 45, 60];
 
-const ROUTES: Record<Mood, {
-  title: string;
-  summary: string;
-  pace: string;
-  environment: string;
-  variants: {
-    variantName: "Default" | "Labyrinth" | "Infinity";
-    soundtrack: string;
-    prompt: string;
-    musicQuery: string;
-  }[];
-}> = {
+const ROUTES: Record<
+  Mood,
+  {
+    title: string;
+    summary: string;
+    pace: string;
+    environment: string;
+    variants: {
+      variantName: "Default" | "Labyrinth" | "Infinity";
+      soundtrack: string;
+      prompt: string;
+      musicQuery: string;
+    }[];
+  }
+> = {
   Calm: {
     title: "Quiet Reset Loop",
-    summary: "A gentle route designed to reduce noise, slow your breathing, and help you decompress.",
+    summary:
+      "A gentle route designed to reduce noise, slow your breathing, and help you decompress.",
     pace: "Easy, unhurried",
     environment: "Tree-lined streets, parks, low traffic roads",
     variants: [
@@ -110,25 +114,28 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Soft piano, ambient electronic, mellow acoustic",
         prompt: "What thought are you ready to leave behind on this walk?",
-        musicQuery: "Soft piano ambient mellow acoustic walking"
+        musicQuery: "Soft piano ambient mellow acoustic walking",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Low-frequency binaural beats, deep space soundscape",
-        prompt: "Focus completely on the texture of the ground under your feet. How does each step land?",
-        musicQuery: "Binaural beats deep space soundscape grounding"
+        prompt:
+          "Focus completely on the texture of the ground under your feet. How does each step land?",
+        musicQuery: "Binaural beats deep space soundscape grounding",
       },
       {
         variantName: "Infinity",
         soundtrack: "Bilateral stimulation tones, calming stream ambient",
-        prompt: "Name three things in your visual field that are green or blue. Notice their specific shade.",
-        musicQuery: "Bilateral stimulation audio calm nature stream"
-      }
-    ]
+        prompt:
+          "Name three things in your visual field that are green or blue. Notice their specific shade.",
+        musicQuery: "Bilateral stimulation audio calm nature stream",
+      },
+    ],
   },
   "Clear Mind": {
     title: "Open Sky Stretch",
-    summary: "A linear route with long sightlines and minimal turns so your mind can untangle itself.",
+    summary:
+      "A linear route with long sightlines and minimal turns so your mind can untangle itself.",
     pace: "Steady, rhythmic",
     environment: "Wide promenades, riverside paths, open horizons",
     variants: [
@@ -136,21 +143,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Lo-fi beats, minimal ambient, light instrumental",
         prompt: "What question keeps circling back to you lately?",
-        musicQuery: "Lofi chill minimal focus instrumental beats"
+        musicQuery: "Lofi chill minimal focus instrumental beats",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Deep theta wave soundscapes, calming Tibetan bowls",
-        prompt: "Count your breaths up to 4 and back down. Inhale... Exhale... Let the count quiet the background noise.",
-        musicQuery: "Theta wave soundscapes calming tibetan singing bowls"
+        prompt:
+          "Count your breaths up to 4 and back down. Inhale... Exhale... Let the count quiet the background noise.",
+        musicQuery: "Theta wave soundscapes calming tibetan singing bowls",
       },
       {
         variantName: "Infinity",
         soundtrack: "Bilateral ambient synth sweeps, gentle wind chimes",
-        prompt: "Observe the farthest point on the horizon. Walk toward it, imagining your thoughts expanding into that open space.",
-        musicQuery: "Bilateral panning ambient synth sweeps relaxing chimes"
-      }
-    ]
+        prompt:
+          "Observe the farthest point on the horizon. Walk toward it, imagining your thoughts expanding into that open space.",
+        musicQuery: "Bilateral panning ambient synth sweeps relaxing chimes",
+      },
+    ],
   },
   "Energy Boost": {
     title: "Sunrise Pulse Route",
@@ -162,21 +171,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Upbeat indie, funky electronic, modern pop",
         prompt: "What's one thing you're ready to bring fresh energy to today?",
-        musicQuery: "Upbeat energetic indie electronic running"
+        musicQuery: "Upbeat energetic indie electronic running",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Synthwave rhythm, high-tempo retro beats",
-        prompt: "Match the tempo of your feet to the beat. Feel the direct power of each stride pushing you forward.",
-        musicQuery: "Upbeat synthwave retrowave high tempo dynamic drive"
+        prompt:
+          "Match the tempo of your feet to the beat. Feel the direct power of each stride pushing you forward.",
+        musicQuery: "Upbeat synthwave retrowave high tempo dynamic drive",
       },
       {
         variantName: "Infinity",
         soundtrack: "Driving tribal drums, melodic house loops",
-        prompt: "Take a deep breath and raise your posture. What is one positive action you will take in the next three hours?",
-        musicQuery: "Driving tribal organic house progressive melodic beats"
-      }
-    ]
+        prompt:
+          "Take a deep breath and raise your posture. What is one positive action you will take in the next three hours?",
+        musicQuery: "Driving tribal organic house progressive melodic beats",
+      },
+    ],
   },
   Reflective: {
     title: "Slow Lantern Path",
@@ -188,21 +199,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Piano sketches, neoclassical, ambient warmth",
         prompt: "What moment from the past month deserves a second look?",
-        musicQuery: "Neoclassical piano warm ambient reflection"
+        musicQuery: "Neoclassical piano warm ambient reflection",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Slow acoustic guitar strings, cinematic cello",
-        prompt: "Recall a moment recently where you felt fully at ease. What did it feel like in your chest?",
-        musicQuery: "Slow acoustic instrumental guitar neoclassical cello"
+        prompt:
+          "Recall a moment recently where you felt fully at ease. What did it feel like in your chest?",
+        musicQuery: "Slow acoustic instrumental guitar neoclassical cello",
       },
       {
         variantName: "Infinity",
         soundtrack: "Atmospheric ambient chimes, rain and piano tape loop",
-        prompt: "Think of one thing that went differently than planned, but taught you something valuable. How did you grow?",
-        musicQuery: "Rain ambient tape loop neoclassical piano chillout"
-      }
-    ]
+        prompt:
+          "Think of one thing that went differently than planned, but taught you something valuable. How did you grow?",
+        musicQuery: "Rain ambient tape loop neoclassical piano chillout",
+      },
+    ],
   },
   Escape: {
     title: "Off-Map Wander",
@@ -214,21 +227,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "World instrumentals, cinematic ambient, dreamy synths",
         prompt: "If today wasn't yours yet, what would you do with the next hour?",
-        musicQuery: "Dreamy synths cinematic electronic wander"
+        musicQuery: "Dreamy synths cinematic electronic wander",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Space ambient drones, mysterious cosmic pads",
-        prompt: "Turn down an unfamiliar path or look closely at a building you usually ignore. What details reveal themselves?",
-        musicQuery: "Cosmic space ambient drone synth explorer soundtrack"
+        prompt:
+          "Turn down an unfamiliar path or look closely at a building you usually ignore. What details reveal themselves?",
+        musicQuery: "Cosmic space ambient drone synth explorer soundtrack",
       },
       {
         variantName: "Infinity",
         soundtrack: "Psych-rock guitar delays, ethereal vocal layers",
-        prompt: "Let yourself step out of your regular story. Who are you when you are completely anonymous on these streets?",
-        musicQuery: "Psych rock guitar delays ambient chill psychedelic dream pop"
-      }
-    ]
+        prompt:
+          "Let yourself step out of your regular story. Who are you when you are completely anonymous on these streets?",
+        musicQuery: "Psych rock guitar delays ambient chill psychedelic dream pop",
+      },
+    ],
   },
   Confidence: {
     title: "Tall Step Avenue",
@@ -240,21 +255,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Cinematic strings, modern soul, driving electronic",
         prompt: "What would you do today if you fully trusted yourself?",
-        musicQuery: "Driving modern soul upbeat confidence walk"
+        musicQuery: "Driving modern soul upbeat confidence walk",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Powerful orchestral brass, cinematic build-ups",
-        prompt: "Roll your shoulders back and stride with intent. Imagine your footprint leaving a solid mark of presence.",
-        musicQuery: "Cinematic epic orchestral brass hybrid electronic motivation"
+        prompt:
+          "Roll your shoulders back and stride with intent. Imagine your footprint leaving a solid mark of presence.",
+        musicQuery: "Cinematic epic orchestral brass hybrid electronic motivation",
       },
       {
         variantName: "Infinity",
         soundtrack: "Funky basslines, disco-soul grooves",
-        prompt: "Recall a major obstacle you successfully overcame. Feel that same resilience moving through your body right now.",
-        musicQuery: "Upbeat funky basslines disco soul groove stroll"
-      }
-    ]
+        prompt:
+          "Recall a major obstacle you successfully overcame. Feel that same resilience moving through your body right now.",
+        musicQuery: "Upbeat funky basslines disco soul groove stroll",
+      },
+    ],
   },
   Recovery: {
     title: "Soft Green Loop",
@@ -266,21 +283,23 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Nature sounds, warm ambient, slow acoustic",
         prompt: "What does your body need you to hear right now?",
-        musicQuery: "Healing nature sounds warm ambient restore"
+        musicQuery: "Healing nature sounds warm ambient restore",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Soft harp strings, healing 432Hz solfeggio tones",
-        prompt: "Soften your jaw, your forehead, and your shoulders. Allow your pace to be completely effortless.",
-        musicQuery: "Soft harp healing 432hz solfeggio frequency peace"
+        prompt:
+          "Soften your jaw, your forehead, and your shoulders. Allow your pace to be completely effortless.",
+        musicQuery: "Soft harp healing 432hz solfeggio frequency peace",
       },
       {
         variantName: "Infinity",
         soundtrack: "Forest birds ambient, gentle acoustic lullaby",
-        prompt: "Inhale slowly for a count of 4, and let the exhale carry out any physical tension. Let yourself just be.",
-        musicQuery: "Gentle acoustic guitar sleeping forest birds sounds"
-      }
-    ]
+        prompt:
+          "Inhale slowly for a count of 4, and let the exhale carry out any physical tension. Let yourself just be.",
+        musicQuery: "Gentle acoustic guitar sleeping forest birds sounds",
+      },
+    ],
   },
   "Creative Spark": {
     title: "Bright Detour Route",
@@ -292,48 +311,54 @@ const ROUTES: Record<Mood, {
         variantName: "Default",
         soundtrack: "Jazz fusion, playful electronic, indie psych",
         prompt: "What half-formed idea wants a little more room today?",
-        musicQuery: "Jazz fusion playful electronic creative flow"
+        musicQuery: "Jazz fusion playful electronic creative flow",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Upbeat glitch-hop, playful 8-bit chiptune",
-        prompt: "Look for two objects of completely contrasting colors placed next to each other. What story do they suggest?",
-        musicQuery: "Playful glitch hop lofi chiptune retro video game creative"
+        prompt:
+          "Look for two objects of completely contrasting colors placed next to each other. What story do they suggest?",
+        musicQuery: "Playful glitch hop lofi chiptune retro video game creative",
       },
       {
         variantName: "Infinity",
         soundtrack: "Abstract synth arpeggios, progressive ambient beats",
-        prompt: "Combine two completely unrelated concepts in your head (e.g., a clock and a cloud). What new invention could they make?",
-        musicQuery: "Abstract modular synth arpeggios progressive math rock chill"
-      }
-    ]
+        prompt:
+          "Combine two completely unrelated concepts in your head (e.g., a clock and a cloud). What new invention could they make?",
+        musicQuery: "Abstract modular synth arpeggios progressive math rock chill",
+      },
+    ],
   },
   "Nature Connection": {
     title: "Nature Scenic Trail",
-    summary: "A breathtaking route tracing lakesides, green spaces, and scenic viewpoints to immerse yourself in the natural landscape.",
+    summary:
+      "A breathtaking route tracing lakesides, green spaces, and scenic viewpoints to immerse yourself in the natural landscape.",
     pace: "Easy, immersive",
     environment: "Lakeside trails, national parks, scenic green areas",
     variants: [
       {
         variantName: "Default",
         soundtrack: "Deep acoustic strings, warm neoclassical chamber music",
-        prompt: "Notice the oldest tree or rock in your sightline. What stories do you think it has stood through?",
-        musicQuery: "Acoustic deep ambient warm neoclassical strings scenic"
+        prompt:
+          "Notice the oldest tree or rock in your sightline. What stories do you think it has stood through?",
+        musicQuery: "Acoustic deep ambient warm neoclassical strings scenic",
       },
       {
         variantName: "Labyrinth",
         soundtrack: "Forest canopy bird songs, deep solfeggio ambient",
-        prompt: "Coordinate your breathing to the rustle of the leaves or the wind. Feel the solid earth push back under each stride.",
-        musicQuery: "Forest canopy bird songs healing solfeggio ambient peace"
+        prompt:
+          "Coordinate your breathing to the rustle of the leaves or the wind. Feel the solid earth push back under each stride.",
+        musicQuery: "Forest canopy bird songs healing solfeggio ambient peace",
       },
       {
         variantName: "Infinity",
         soundtrack: "Lakeside stream audio, soothing crystal singing bowls",
-        prompt: "Let your gaze rest on the horizon or water surface. Walk imagining your thoughts expanding into the open landscape.",
-        musicQuery: "Lakeside stream soothing crystal singing bowls meditation"
-      }
-    ]
-  }
+        prompt:
+          "Let your gaze rest on the horizon or water surface. Walk imagining your thoughts expanding into the open landscape.",
+        musicQuery: "Lakeside stream soothing crystal singing bowls meditation",
+      },
+    ],
+  },
 };
 
 function getMusicLaunchUrl(provider: string, query: string): string {
@@ -395,11 +420,14 @@ function MoodMiles() {
   const [routeVariant, setRouteVariant] = useState<number>(0);
   const [scenicSpot, setScenicSpot] = useState<{ name: string } | null>(null);
 
-  const SCENIC_HOTSPOTS = useMemo(() => [
-    { name: "Windermere, Lake District", lat: 54.3643, lng: -2.9207, radiusMiles: 10 },
-    { name: "Hyde Park, London", lat: 51.5073, lng: -0.1656, radiusMiles: 2 },
-    { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 }
-  ], []);
+  const SCENIC_HOTSPOTS = useMemo(
+    () => [
+      { name: "Windermere, Lake District", lat: 54.3643, lng: -2.9207, radiusMiles: 10 },
+      { name: "Hyde Park, London", lat: 51.5073, lng: -0.1656, radiusMiles: 2 },
+      { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 },
+    ],
+    [],
+  );
 
   // Location-Aware Scenic Spot Detector Effect
   useEffect(() => {
@@ -429,10 +457,19 @@ function MoodMiles() {
             const addr = data.address;
             const county = addr.county || "";
             const district = addr.state_district || addr.suburb || addr.city || "";
-            
+
             const textToSearch = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
-            const keywords = ["lake district", "national park", "forest", "reserve", "nature", "valley", "lake", "park"];
-            const isScenic = keywords.some(kw => textToSearch.includes(kw));
+            const keywords = [
+              "lake district",
+              "national park",
+              "forest",
+              "reserve",
+              "nature",
+              "valley",
+              "lake",
+              "park",
+            ];
+            const isScenic = keywords.some((kw) => textToSearch.includes(kw));
 
             if (isScenic) {
               const parsedName = county || district || "Beautiful Scenic Spot";
@@ -499,17 +536,23 @@ function MoodMiles() {
   });
   const [walkingSpeed, setWalkingSpeed] = useState<"slow" | "normal" | "brisk">(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("moodmiles_walking_speed") as "slow" | "normal" | "brisk") || "normal";
+      return (
+        (localStorage.getItem("moodmiles_walking_speed") as "slow" | "normal" | "brisk") || "normal"
+      );
     }
     return "normal";
   });
   const [runningSpeed, setRunningSpeed] = useState<"jog" | "fast" | "sprint">(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("moodmiles_running_speed") as "jog" | "fast" | "sprint") || "fast";
+      return (
+        (localStorage.getItem("moodmiles_running_speed") as "jog" | "fast" | "sprint") || "fast"
+      );
     }
     return "fast";
   });
-  const [musicProvider, setMusicProvider] = useState<"spotify" | "apple" | "ytmusic" | "youtube" | "tidal">(() => {
+  const [musicProvider, setMusicProvider] = useState<
+    "spotify" | "apple" | "ytmusic" | "youtube" | "tidal"
+  >(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("moodmiles_music_provider") as any) || "spotify";
     }
@@ -533,7 +576,7 @@ function MoodMiles() {
           lng: position.coords.longitude,
         };
         setDeviceLocation(coords);
-        
+
         // Populate standard userLocation initially if not using custom dropped pin
         if (!usingCustomLocation && !userLocation) {
           setUserLocation(coords);
@@ -543,7 +586,7 @@ function MoodMiles() {
       (err) => {
         console.warn("Background device location retrieval failed: ", err.message);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   }, [usingCustomLocation, userLocation]);
 
@@ -728,7 +771,7 @@ function MoodMiles() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            
+
             <div className="mt-4 space-y-5">
               {/* Map Theme Toggle */}
               <div className="space-y-2">
@@ -772,7 +815,8 @@ function MoodMiles() {
                 </span>
                 <div className="grid grid-cols-3 gap-2">
                   {(["slow", "normal", "brisk"] as const).map((spd) => {
-                    const label = spd === "slow" ? "3.5 km/h" : spd === "normal" ? "4.8 km/h" : "6.0 km/h";
+                    const label =
+                      spd === "slow" ? "3.5 km/h" : spd === "normal" ? "4.8 km/h" : "6.0 km/h";
                     return (
                       <button
                         key={spd}
@@ -801,7 +845,8 @@ function MoodMiles() {
                 </span>
                 <div className="grid grid-cols-3 gap-2">
                   {(["jog", "fast", "sprint"] as const).map((spd) => {
-                    const label = spd === "jog" ? "8.0 km/h" : spd === "fast" ? "10.5 km/h" : "13.0 km/h";
+                    const label =
+                      spd === "jog" ? "8.0 km/h" : spd === "fast" ? "10.5 km/h" : "13.0 km/h";
                     return (
                       <button
                         key={spd}
@@ -871,9 +916,7 @@ function MoodMiles() {
                     <div className="text-xs font-medium truncate">
                       {user.user_metadata?.full_name || user.email}
                     </div>
-                    <div className="text-[10px] text-muted-foreground truncate">
-                      {user.email}
-                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
                   </div>
                   <button
                     onClick={async () => {
@@ -936,7 +979,11 @@ function Header({
         <ArrowLeft className="h-4 w-4" />
       </button>
       <div className="flex items-center gap-2">
-        <img src={logoUrl} alt="MoodMiles Logo" className="h-7 w-7 object-contain rounded-full border border-border/40" />
+        <img
+          src={logoUrl}
+          alt="MoodMiles Logo"
+          className="h-7 w-7 object-contain rounded-full border border-border/40"
+        />
         <span className="text-sm font-medium tracking-wide">MoodMiles</span>
       </div>
       <div className="flex items-center gap-2">
@@ -990,10 +1037,9 @@ function MiniJourneyMap({ breadcrumbs }: { breadcrumbs: { lat: number; lng: numb
       });
       mapRef.current = map;
 
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        { maxZoom: 20 }
-      ).addTo(map);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 20,
+      }).addTo(map);
 
       const pathCoords = breadcrumbs.map((pt) => [pt.lat, pt.lng]) as any[];
       const polyline = L.polyline(pathCoords, {
@@ -1132,7 +1178,8 @@ function Landing({
 
   // Dynamic Shift Analytics Engine
   const shiftStats = useMemo(() => {
-    const stats: Record<string, { better: number; same: number; worse: number; total: number }> = {};
+    const stats: Record<string, { better: number; same: number; worse: number; total: number }> =
+      {};
     journeys.forEach((j) => {
       if (!j.mood) return;
       if (!stats[j.mood]) {
@@ -1179,7 +1226,8 @@ function Landing({
     const best = sorted[0];
     if (!best || best.better === 0) return null;
 
-    const variantName = best.variant === 1 ? "Labyrinth" : best.variant === 2 ? "Infinity" : "Default";
+    const variantName =
+      best.variant === 1 ? "Labyrinth" : best.variant === 2 ? "Infinity" : "Default";
     return `Your fastest emotional lift happens during ${best.duration}-minute ${best.activity.toLowerCase()}s walking the ${variantName} loop.`;
   }, [journeys]);
 
@@ -1234,7 +1282,8 @@ function Landing({
         })
         .filter((score) => score !== null) as number[];
 
-      const avgMoodScore = moodScores.length > 0 ? moodScores.reduce((sum, s) => sum + s, 0) / moodScores.length : 0;
+      const avgMoodScore =
+        moodScores.length > 0 ? moodScores.reduce((sum, s) => sum + s, 0) / moodScores.length : 0;
 
       return {
         label: day.toLocaleDateString("en-GB", { weekday: "short" }),
@@ -1260,15 +1309,13 @@ function Landing({
         </div>
 
         <div className="space-y-3">
-          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-            MoodMiles
-          </p>
+          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">MoodMiles</p>
           <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight text-foreground">
             Walk how you want to feel.
           </h1>
           <p className="mx-auto max-w-xs text-balance text-sm leading-relaxed text-muted-foreground">
-            Forget calories and pace. Choose a mood, choose your minutes, and we'll shape
-            a route around how you want to arrive home.
+            Forget calories and pace. Choose a mood, choose your minutes, and we'll shape a route
+            around how you want to arrive home.
           </p>
         </div>
       </div>
@@ -1300,9 +1347,7 @@ function Landing({
         )}
 
         {!user && authLoading && (
-          <p className="text-center text-[11px] text-muted-foreground">
-            Connecting...
-          </p>
+          <p className="text-center text-[11px] text-muted-foreground">Connecting...</p>
         )}
       </div>
 
@@ -1312,7 +1357,12 @@ function Landing({
           {/* Tabs bar */}
           <div className="grid grid-cols-3 gap-1 rounded-2xl bg-card/55 p-1 border border-border/50 backdrop-blur-md shadow-sm">
             {(["history", "analytics", "milestones"] as const).map((tab) => {
-              const label = tab === "history" ? "My Walks" : tab === "analytics" ? "Mood Analytics" : "Milestones";
+              const label =
+                tab === "history"
+                  ? "My Walks"
+                  : tab === "analytics"
+                    ? "Mood Analytics"
+                    : "Milestones";
               const Icon = tab === "history" ? History : tab === "analytics" ? TrendingUp : Trophy;
               const active = activeTab === tab;
               return (
@@ -1327,7 +1377,9 @@ function Landing({
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{label}</span>
-                  <span className="sm:hidden">{tab === "history" ? "Walks" : tab === "analytics" ? "Moods" : "Badges"}</span>
+                  <span className="sm:hidden">
+                    {tab === "history" ? "Walks" : tab === "analytics" ? "Moods" : "Badges"}
+                  </span>
                 </button>
               );
             })}
@@ -1367,8 +1419,10 @@ function Landing({
                   {journeys.map((j) => {
                     const isExpanded = expandedJourneyId === j.id;
                     const matchedRoute = ROUTES[j.mood as Mood];
-                    const currentVariant = matchedRoute?.variants[j.route_variant || 0] || matchedRoute?.variants[0];
-                    const promptText = currentVariant?.prompt || "Focus on the rhythm of your strides.";
+                    const currentVariant =
+                      matchedRoute?.variants[j.route_variant || 0] || matchedRoute?.variants[0];
+                    const promptText =
+                      currentVariant?.prompt || "Focus on the rhythm of your strides.";
 
                     return (
                       <div
@@ -1413,11 +1467,13 @@ function Landing({
                               {j.steps.toLocaleString()}
                             </span>
                           )}
-                          {j.route_variant !== undefined && j.route_variant !== null && j.route_variant > 0 && (
-                            <span className="rounded-full border border-accent/30 bg-accent/15 text-accent font-semibold px-2 py-0.5 text-[9px]">
-                              {j.route_variant === 1 ? "Labyrinth" : "Infinity"}
-                            </span>
-                          )}
+                          {j.route_variant !== undefined &&
+                            j.route_variant !== null &&
+                            j.route_variant > 0 && (
+                              <span className="rounded-full border border-accent/30 bg-accent/15 text-accent font-semibold px-2 py-0.5 text-[9px]">
+                                {j.route_variant === 1 ? "Labyrinth" : "Infinity"}
+                              </span>
+                            )}
                           <span className="rounded-full border border-border/60 bg-background/30 px-2 py-0.5 text-foreground/80 font-medium ml-auto">
                             {j.activity}
                           </span>
@@ -1498,7 +1554,8 @@ function Landing({
               {/* Shift matrix bars */}
               {Object.keys(shiftStats).length === 0 ? (
                 <div className="rounded-2xl border border-border/60 bg-card/40 p-6 backdrop-blur text-center text-xs text-muted-foreground">
-                  Complete a few journeys with varying post-feelings to unlock detailed shift analytics.
+                  Complete a few journeys with varying post-feelings to unlock detailed shift
+                  analytics.
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
@@ -1513,7 +1570,9 @@ function Landing({
                         className="rounded-2xl border border-border/60 bg-card/40 p-4.5 backdrop-blur space-y-3.5 shadow-sm"
                       >
                         <div className="flex justify-between items-baseline">
-                          <span className="text-xs font-bold text-foreground/90">{startMood} walks</span>
+                          <span className="text-xs font-bold text-foreground/90">
+                            {startMood} walks
+                          </span>
                           <span className="text-[10px] text-muted-foreground font-semibold">
                             {stats.total} total {stats.total === 1 ? "journey" : "journeys"}
                           </span>
@@ -1522,13 +1581,22 @@ function Landing({
                         {/* Multi-Segmented Custom Heatbar */}
                         <div className="h-2.5 w-full rounded-full bg-muted-foreground/5 flex overflow-hidden border border-border/40">
                           {stats.better > 0 && (
-                            <div style={{ width: `${betterPct}%` }} className="h-full bg-emerald-400 shadow-sm" />
+                            <div
+                              style={{ width: `${betterPct}%` }}
+                              className="h-full bg-emerald-400 shadow-sm"
+                            />
                           )}
                           {stats.same > 0 && (
-                            <div style={{ width: `${samePct}%` }} className="h-full bg-amber-400 shadow-sm" />
+                            <div
+                              style={{ width: `${samePct}%` }}
+                              className="h-full bg-amber-400 shadow-sm"
+                            />
                           )}
                           {stats.worse > 0 && (
-                            <div style={{ width: `${worsePct}%` }} className="h-full bg-red-400 shadow-sm" />
+                            <div
+                              style={{ width: `${worsePct}%` }}
+                              className="h-full bg-red-400 shadow-sm"
+                            />
                           )}
                         </div>
 
@@ -1592,13 +1660,19 @@ function Landing({
                       >
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border/80 p-2.5 rounded-xl text-[10px] space-y-0.5 shadow-xl pointer-events-none z-50 w-24 text-center">
-                          <div className="font-bold text-foreground">{d.steps.toLocaleString()} steps</div>
+                          <div className="font-bold text-foreground">
+                            {d.steps.toLocaleString()} steps
+                          </div>
                           {d.count > 0 && (
-                            <div className={`${d.moodScore >= 75 ? "text-emerald-400" : "text-amber-400"} font-bold`}>
+                            <div
+                              className={`${d.moodScore >= 75 ? "text-emerald-400" : "text-amber-400"} font-bold`}
+                            >
                               {d.moodScore}% Mood Lift
                             </div>
                           )}
-                          {d.count === 0 && <div className="text-muted-foreground/60">No walks</div>}
+                          {d.count === 0 && (
+                            <div className="text-muted-foreground/60">No walks</div>
+                          )}
                         </div>
 
                         {/* Chart Columns */}
@@ -1659,7 +1733,8 @@ function Landing({
                           {calmSteps.toLocaleString()} / {goal.toLocaleString()} steps
                         </p>
                         <p className="text-[10px] text-muted-foreground leading-snug">
-                          Total steps taken during Calm or Recovery sensory loops to ground your body.
+                          Total steps taken during Calm or Recovery sensory loops to ground your
+                          body.
                         </p>
                       </div>
                     </div>
@@ -1679,7 +1754,9 @@ function Landing({
                         </div>
                       </div>
                       <div className="space-y-0.5 min-w-0">
-                        <h4 className="text-xs font-bold text-foreground truncate">Spark Distance</h4>
+                        <h4 className="text-xs font-bold text-foreground truncate">
+                          Spark Distance
+                        </h4>
                         <p className="text-[9px] text-cyan-400 uppercase tracking-wide font-bold">
                           {energyMiles.toFixed(1)} / {goal.toLocaleString()} miles
                         </p>
@@ -1727,9 +1804,7 @@ function Landing({
 function StepHeading({ kicker, title, sub }: { kicker: string; title: string; sub?: string }) {
   return (
     <div className="mb-6 space-y-2">
-      <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-        {kicker}
-      </p>
+      <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">{kicker}</p>
       <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
       {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
     </div>
@@ -1802,7 +1877,9 @@ function MoodStep({
                 <Icon className="h-4 w-4" />
               </div>
               <div className="mt-2 min-w-0 w-full">
-                <div className="text-xs font-bold text-foreground leading-tight truncate">{label}</div>
+                <div className="text-xs font-bold text-foreground leading-tight truncate">
+                  {label}
+                </div>
                 <div className="mt-1 text-[9px] leading-snug text-muted-foreground line-clamp-2">
                   {hint}
                 </div>
@@ -1859,7 +1936,11 @@ function ActivityStep({
   selected: Activity | null;
   onSelect: (a: Activity) => void;
 }) {
-  const opts: { label: Activity; icon: React.ComponentType<{ className?: string }>; hint: string }[] = [
+  const opts: {
+    label: Activity;
+    icon: React.ComponentType<{ className?: string }>;
+    hint: string;
+  }[] = [
     { label: "Walk", icon: Footprints, hint: "Slow it down, take it in" },
     { label: "Run", icon: Activity, hint: "Move with momentum" },
   ];
@@ -1937,7 +2018,10 @@ function RouteScreen({
   onStart: () => void;
   routeVariant: number;
 }) {
-  const currentVariant = useMemo(() => route.variants[routeVariant] || route.variants[0], [route, routeVariant]);
+  const currentVariant = useMemo(
+    () => route.variants[routeVariant] || route.variants[0],
+    [route, routeVariant],
+  );
 
   const distanceToStartMiles = useMemo(() => {
     if (!deviceLocation || !userLocation) return 0;
@@ -1945,7 +2029,7 @@ function RouteScreen({
       deviceLocation.lat,
       deviceLocation.lng,
       userLocation.lat,
-      userLocation.lng
+      userLocation.lng,
     );
   }, [deviceLocation, userLocation]);
 
@@ -1958,7 +2042,8 @@ function RouteScreen({
 
   const handleNavigateToStart = () => {
     if (!userLocation) return;
-    const isApple = typeof navigator !== "undefined" && /Mac|iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isApple =
+      typeof navigator !== "undefined" && /Mac|iPad|iPhone|iPod/.test(navigator.userAgent);
     const url = isApple
       ? `https://maps.apple.com/?daddr=${userLocation.lat},${userLocation.lng}`
       : `https://www.google.com/maps/dir/?api=1&destination=${userLocation.lat},${userLocation.lng}`;
@@ -1968,11 +2053,10 @@ function RouteScreen({
   return (
     <section className="space-y-5">
       <div className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-          Your route
-        </p>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">Your route</p>
         <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-          {route.title}{routeVariant === 1 ? " (Labyrinth)" : routeVariant === 2 ? " (Infinity)" : ""}
+          {route.title}
+          {routeVariant === 1 ? " (Labyrinth)" : routeVariant === 2 ? " (Infinity)" : ""}
         </h2>
         <div className="flex flex-wrap gap-2 pt-1">
           <Chip>{mood}</Chip>
@@ -1997,9 +2081,7 @@ function RouteScreen({
         routeVariant={routeVariant}
       />
 
-      <p className="text-[15px] leading-relaxed text-foreground/85">
-        {route.summary}
-      </p>
+      <p className="text-[15px] leading-relaxed text-foreground/85">{route.summary}</p>
 
       <div className="space-y-2">
         <DetailRow icon={Gauge} label="Pace" value={route.pace} />
@@ -2010,7 +2092,9 @@ function RouteScreen({
           value={currentVariant.soundtrack}
           action={
             <button
-              onClick={() => window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")}
+              onClick={() =>
+                window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")
+              }
               className="rounded-lg bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
             >
               <Music className="h-3.5 w-3.5 animate-pulse" />
@@ -2119,13 +2203,9 @@ function PostScreen({
   return (
     <section className="space-y-6 pt-4">
       <div className="space-y-2 text-center">
-        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-          You're back
-        </p>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">You're back</p>
         <h2 className="text-3xl font-semibold tracking-tight">How do you feel now?</h2>
-        <p className="text-sm text-muted-foreground">
-          No wrong answer. Just check in.
-        </p>
+        <p className="text-sm text-muted-foreground">No wrong answer. Just check in.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -2150,12 +2230,9 @@ function PostScreen({
       {reflection && (
         <div className="rounded-2xl border border-border/60 bg-card/50 p-5 backdrop-blur">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" />
-            A short reflection
+            <Sparkles className="h-3.5 w-3.5" />A short reflection
           </div>
-          <p className="mt-2 text-[15px] leading-relaxed text-foreground/90">
-            {reflection}
-          </p>
+          <p className="mt-2 text-[15px] leading-relaxed text-foreground/90">{reflection}</p>
         </div>
       )}
 
@@ -2251,9 +2328,7 @@ function RecapScreen({
   const animatedSteps = useCountUp(journeyData.steps || 0, 1200, 700);
 
   const paceSecondsPerKm =
-    journeyData.distanceKm > 0.01
-      ? journeyData.seconds / journeyData.distanceKm
-      : 0;
+    journeyData.distanceKm > 0.01 ? journeyData.seconds / journeyData.distanceKm : 0;
   const animatedPace = useCountUp(paceSecondsPerKm, 1200, 700);
 
   const formatTime = (totalSecs: number) => {
@@ -2295,15 +2370,14 @@ function RecapScreen({
       });
       mapRef.current = map;
 
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        { maxZoom: 20 }
-      ).addTo(map);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 20,
+      }).addTo(map);
 
-      const pathCoords = journeyData.breadcrumbs.map((pt) => [
-        pt.lat,
-        pt.lng,
-      ]) as [number, number][];
+      const pathCoords = journeyData.breadcrumbs.map((pt) => [pt.lat, pt.lng]) as [
+        number,
+        number,
+      ][];
 
       const polyline = L.polyline(pathCoords, {
         color: "#06b6d4",
@@ -2324,8 +2398,7 @@ function RecapScreen({
       L.marker([startPt.lat, startPt.lng], { icon: startIcon }).addTo(map);
 
       // End marker
-      const endPt =
-        journeyData.breadcrumbs[journeyData.breadcrumbs.length - 1];
+      const endPt = journeyData.breadcrumbs[journeyData.breadcrumbs.length - 1];
       if (endPt !== startPt) {
         const endIcon = L.divIcon({
           className: "recap-end-marker",
@@ -2357,11 +2430,14 @@ function RecapScreen({
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-primary/30 border border-primary/20">
           <Trophy className="h-7 w-7 text-primary" />
         </div>
-        <p className="text-[11px] uppercase tracking-[0.25em] text-accent">
-          Journey Complete
-        </p>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-accent">Journey Complete</p>
         <h2 className="text-3xl font-bold tracking-tight">
-          {routeTitle}{journeyData.routeVariant === 1 ? " (Labyrinth)" : journeyData.routeVariant === 2 ? " (Infinity)" : ""}
+          {routeTitle}
+          {journeyData.routeVariant === 1
+            ? " (Labyrinth)"
+            : journeyData.routeVariant === 2
+              ? " (Infinity)"
+              : ""}
         </h2>
         <div className="flex justify-center flex-wrap gap-2 pt-1">
           <Chip>{mood}</Chip>
@@ -2372,7 +2448,10 @@ function RecapScreen({
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3" style={{ animationDelay: "300ms" }}>
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "300ms" }}>
+        <div
+          className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+          style={{ animationDelay: "300ms" }}
+        >
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
               <Timer className="h-4 w-4 text-cyan-400" />
@@ -2381,12 +2460,13 @@ function RecapScreen({
           <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
             {formatTime(animatedSeconds)}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Duration
-          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Duration</div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "500ms" }}>
+        <div
+          className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+          style={{ animationDelay: "500ms" }}
+        >
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20">
               <MapPin className="h-4 w-4 text-emerald-400" />
@@ -2400,7 +2480,10 @@ function RecapScreen({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "700ms" }}>
+        <div
+          className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+          style={{ animationDelay: "700ms" }}
+        >
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
               <Footprints className="h-4 w-4 text-emerald-400" />
@@ -2414,7 +2497,10 @@ function RecapScreen({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "900ms" }}>
+        <div
+          className="rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur text-center space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+          style={{ animationDelay: "900ms" }}
+        >
           <div className="flex justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20">
               <TrendingUp className="h-4 w-4 text-violet-400" />
@@ -2423,14 +2509,15 @@ function RecapScreen({
           <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
             {formatPace(animatedPace)}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Pace /km
-          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Pace /km</div>
         </div>
       </div>
 
       {/* Mini Route Map */}
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "800ms" }}>
+      <div
+        className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+        style={{ animationDelay: "800ms" }}
+      >
         <div className="flex items-center gap-2 mb-2 px-1">
           <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
             <Compass className="h-3.5 w-3.5 text-accent" />
@@ -2439,15 +2526,10 @@ function RecapScreen({
         </div>
         {hasBreadcrumbs ? (
           <div className="relative h-48 w-full overflow-hidden rounded-2xl border border-border/60 shadow-lg shadow-black/10">
-            <div
-              ref={mapContainerRef}
-              className="absolute inset-0 h-full w-full bg-background"
-            />
+            <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
             {!mapReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-card/60 backdrop-blur-sm">
-                <span className="text-xs text-muted-foreground">
-                  Loading trail...
-                </span>
+                <span className="text-xs text-muted-foreground">Loading trail...</span>
               </div>
             )}
           </div>
@@ -2465,7 +2547,10 @@ function RecapScreen({
       </div>
 
       {/* Save status + Continue Button */}
-      <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both space-y-3" style={{ animationDelay: "1000ms" }}>
+      <div
+        className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both space-y-3"
+        style={{ animationDelay: "1000ms" }}
+      >
         {user && (
           <div className="flex items-center justify-center gap-1.5 text-[11px]">
             {saving && (
@@ -2537,7 +2622,10 @@ function ActiveScreen({
   const [breadcrumbs, setBreadcrumbs] = useState<{ lat: number; lng: number }[]>([]);
   const [liveSteps, setLiveSteps] = useState(0);
 
-  const currentVariant = useMemo(() => route.variants[routeVariant] || route.variants[0], [route, routeVariant]);
+  const currentVariant = useMemo(
+    () => route.variants[routeVariant] || route.variants[0],
+    [route, routeVariant],
+  );
 
   useEffect(() => {
     let active = true;
@@ -2731,9 +2819,7 @@ function ActiveScreen({
           <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-cyan-400 truncate">
             {liveDistance.toFixed(2)}
           </div>
-          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">
-            Kilometers
-          </div>
+          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">Kilometers</div>
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-card/40 p-3.5 backdrop-blur flex flex-col justify-between">
@@ -2744,9 +2830,7 @@ function ActiveScreen({
             <Footprints className="h-3.5 w-3.5 self-center mr-0.5 shrink-0" />
             {liveSteps.toLocaleString()}
           </div>
-          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">
-            Step Count
-          </div>
+          <div className="mt-0.5 text-[9px] text-muted-foreground/80 truncate">Step Count</div>
         </div>
       </div>
 
@@ -2756,14 +2840,17 @@ function ActiveScreen({
           <Quote className="h-3.5 w-3.5 text-accent animate-pulse" />
           Mindfulness prompts
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[11px] leading-relaxed text-muted-foreground gap-2">
             <div>
-              <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span> {currentVariant.soundtrack}
+              <span className="font-semibold text-foreground/80">Ambient Soundtrack:</span>{" "}
+              {currentVariant.soundtrack}
             </div>
             <button
-              onClick={() => window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")}
+              onClick={() =>
+                window.open(getMusicLaunchUrl(musicProvider, currentVariant.musicQuery), "_blank")
+              }
               className="rounded-lg bg-accent/20 hover:bg-accent/30 text-accent px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
             >
               <Music className="h-3 w-3 animate-pulse" />
@@ -2785,7 +2872,15 @@ function ActiveScreen({
           {paused ? "Resume" : "Pause"}
         </Button>
         <Button
-          onClick={() => onComplete({ seconds, distanceKm: liveDistance, breadcrumbs, steps: liveSteps, routeVariant })}
+          onClick={() =>
+            onComplete({
+              seconds,
+              distanceKm: liveDistance,
+              breadcrumbs,
+              steps: liveSteps,
+              routeVariant,
+            })
+          }
           className="h-13 rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 shadow-md shadow-primary/10 col-span-2"
         >
           Complete Journey

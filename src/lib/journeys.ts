@@ -57,10 +57,7 @@ export async function saveJourney(journey: {
   return data?.id ?? null;
 }
 
-export async function updateJourneyFeeling(
-  journeyId: string,
-  feeling: string
-): Promise<void> {
+export async function updateJourneyFeeling(journeyId: string, feeling: string): Promise<void> {
   if (!supabaseConfigured) return;
 
   const { error } = await supabase

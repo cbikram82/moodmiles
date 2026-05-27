@@ -8,9 +8,9 @@ export const Route = createFileRoute("/auth/callback")({
 });
 
 function AuthCallbackPage() {
-  const [status, setStatus] = useState<
-    "processing" | "redirecting" | "fallback" | "error"
-  >("processing");
+  const [status, setStatus] = useState<"processing" | "redirecting" | "fallback" | "error">(
+    "processing",
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -65,18 +65,14 @@ function AuthCallbackPage() {
           <>
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="text-sm text-muted-foreground">
-              {status === "processing"
-                ? "Signing you in..."
-                : "Redirecting to MoodMiles..."}
+              {status === "processing" ? "Signing you in..." : "Redirecting to MoodMiles..."}
             </p>
           </>
         )}
 
         {status === "fallback" && code && (
           <>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Tap below to return to the app.
-            </p>
+            <p className="mb-4 text-sm text-muted-foreground">Tap below to return to the app.</p>
             <a
               href={`moodmiles://callback?code=${code}`}
               className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90"

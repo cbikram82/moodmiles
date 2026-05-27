@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
 import { supabase, supabaseConfigured } from "./supabase";
@@ -114,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (!supabaseConfigured) {
         alert(
-          "Google Sign-In Error: Supabase is not configured. Please check if VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Railway's environment variables dashboard and that the application was rebuilt after setting them."
+          "Google Sign-In Error: Supabase is not configured. Please check if VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Railway's environment variables dashboard and that the application was rebuilt after setting them.",
         );
         return;
       }
@@ -133,7 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error || !data.url) {
-        alert("OAuth initialization error: " + (error?.message || "No redirection URL returned from Supabase."));
+        alert(
+          "OAuth initialization error: " +
+            (error?.message || "No redirection URL returned from Supabase."),
+        );
         console.error("OAuth error:", error?.message);
         return;
       }
@@ -171,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           display_name: user.user_metadata?.full_name ?? null,
           avatar_url: user.user_metadata?.avatar_url ?? null,
         },
-        { onConflict: "id" }
+        { onConflict: "id" },
       )
       .then(({ error }) => {
         if (error) {

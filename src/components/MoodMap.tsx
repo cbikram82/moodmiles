@@ -189,7 +189,7 @@ export function MoodMap({
           console.warn("Geolocation watch error: ", err.message);
           setLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
     } else if (!usingCustomLocation && !routeCenter) {
       // 2B. Single shot planning retrieval - ONLY if no custom location is currently set
@@ -209,7 +209,7 @@ export function MoodMap({
           setLocationName("London, UK (Default)");
           setLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
       );
     } else {
       // Already has a planned route center
@@ -420,7 +420,7 @@ export function MoodMap({
     }
 
     const map = mapInstanceRef.current;
-    
+
     // Clear all previously drawn markers and polylines cleanly
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
@@ -432,9 +432,7 @@ export function MoodMap({
     // Calculate coordinates loop around routeCenter
     const waypoints = getLoopWaypoints(routeCenter);
     const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
-    const coordinatesString = fullCoordinates
-      .map((coord) => `${coord.lng},${coord.lat}`)
-      .join(";");
+    const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
     const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson`;
 
     // Static Custom Start Pin
@@ -449,7 +447,9 @@ export function MoodMap({
       iconSize: [24, 24],
       iconAnchor: [12, 12],
     });
-    const startMarker = L.marker([routeCenter.lat, routeCenter.lng], { icon: startIcon }).addTo(map);
+    const startMarker = L.marker([routeCenter.lat, routeCenter.lng], { icon: startIcon }).addTo(
+      map,
+    );
     markersRef.current.push(startMarker);
 
     // Waypoint Dots Custom Pin
@@ -533,7 +533,9 @@ export function MoodMap({
       });
 
       if (!liveMarkerRef.current) {
-        liveMarkerRef.current = L.marker([liveLocation.lat, liveLocation.lng], { icon: liveIcon }).addTo(map);
+        liveMarkerRef.current = L.marker([liveLocation.lat, liveLocation.lng], {
+          icon: liveIcon,
+        }).addTo(map);
       } else {
         liveMarkerRef.current.setLatLng([liveLocation.lat, liveLocation.lng]);
       }
@@ -802,15 +804,23 @@ export function MoodMap({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
     };
-  }, [loading, mapTheme, mood, duration, activity, routeCenter, walkingSpeed, runningSpeed, liveTracking]);
+  }, [
+    loading,
+    mapTheme,
+    mood,
+    duration,
+    activity,
+    routeCenter,
+    walkingSpeed,
+    runningSpeed,
+    liveTracking,
+  ]);
 
   if (loading) {
     return (
       <div className="flex h-60 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="mt-2 text-xs text-muted-foreground">
-          Locating your coordinates...
-        </span>
+        <span className="mt-2 text-xs text-muted-foreground">Locating your coordinates...</span>
       </div>
     );
   }
@@ -845,7 +855,7 @@ export function MoodMap({
         {mapTheme === "real" ? (
           <>
             <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
-            
+
             {/* Soft Overlay Label Tip for Interactive Tapping */}
             {!liveTracking && (
               <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full bg-background/90 px-3.5 py-1 text-[9px] font-semibold text-muted-foreground tracking-wider uppercase border border-border/40 pointer-events-none shadow-sm backdrop-blur-md">
@@ -856,7 +866,7 @@ export function MoodMap({
         ) : (
           <>
             <canvas ref={canvasRef} className="block h-full w-full bg-[#0c0d12]" />
-            
+
             {/* Helper Tip in Cyberpunk mode */}
             {!liveTracking && (
               <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full bg-background/90 px-3.5 py-1 text-[9px] font-semibold text-muted-foreground tracking-wider uppercase border border-border/40 pointer-events-none shadow-sm backdrop-blur-md">
