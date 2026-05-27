@@ -438,17 +438,22 @@ function useScenicDetector(
 
     // 2. OpenStreetMap Nominatim reverse geocoding fallback
     try {
-      const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=10`;
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${userLocation.lat}&lon=${userLocation.lng}&format=json&zoom=18`;
       fetch(url)
         .then((res) => res.json())
         .then((data) => {
           if (data && data.address) {
             const addr = data.address;
+            const parkName =
+              addr.park || addr.leisure || addr.natural || addr.tourism || addr.attraction || "";
             const county = addr.county || "";
-            const district = addr.state_district || addr.suburb || addr.city || "";
+            const neighborhood = addr.neighbourhood || addr.suburb || "";
+            const district = addr.state_district || addr.city || "";
 
-            const searchStr = `${county} ${district} ${data.display_name || ""}`.toLowerCase();
+            const searchStr =
+              `${parkName} ${county} ${neighborhood} ${district} ${data.display_name || ""}`.toLowerCase();
             const keywords = [
+              "park",
               "lake district",
               "national park",
               "forest",
@@ -456,12 +461,26 @@ function useScenicDetector(
               "nature",
               "valley",
               "lake",
-              "park",
+              "garden",
+              "meadow",
+              "common",
+              "wood",
+              "heath",
+              "field",
+              "walk",
+              "trail",
+              "hill",
+              "downs",
+              "moor",
+              "beck",
+              "water",
+              "leisure",
             ];
-            const isScenic = keywords.some((kw) => searchStr.includes(kw));
+            const isScenic = keywords.some((kw) => searchStr.includes(kw)) || !!parkName;
 
             if (isScenic) {
-              const parsedName = county || district || "Beautiful Scenic Spot";
+              const parsedName =
+                parkName || neighborhood || county || district || "Beautiful Scenic Spot";
               setScenicSpot({ name: parsedName });
             } else {
               setScenicSpot(null);
