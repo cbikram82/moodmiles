@@ -66,5 +66,7 @@
 	<string>MoodMiles requires continuous location tracking to trace your walked path during journeys without interruption.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>MoodMiles requires access to your motion and step sensors to count your steps in real-time during your walks and runs.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
