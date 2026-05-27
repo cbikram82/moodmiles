@@ -938,7 +938,7 @@ export function MoodMap({
           )}
         </span>
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 shrink-0">
-          {liveTracking ? "Live" : mapTheme === "real" ? "Walkable Loop" : "Procedural Loop"} · ~
+          {liveTracking ? "Live" : mapTheme !== "cyberpunk" ? "Walkable Loop" : "Procedural Loop"} · ~
           {liveTracking
             ? (Math.round(cumulativeDistance * 100) / 100).toFixed(2)
             : (Math.round(routingDistance * 10) / 10).toFixed(1)}{" "}
@@ -948,7 +948,7 @@ export function MoodMap({
 
       {/* Map container frame - Height increased to h-60 for accessibility */}
       <div className="relative h-60 w-full overflow-hidden rounded-3xl border border-border/60 shadow-lg shadow-black/10">
-        {mapTheme === "real" ? (
+        {mapTheme !== "cyberpunk" ? (
           <>
             <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
 
