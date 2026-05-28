@@ -538,6 +538,7 @@ export function MoodMap({
     
     const debounceTimer = setTimeout(() => {
       const calculateAffectiveRoute = async () => {
+        const routeStart = performance.now();
         setRouteLoading(true);
         const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
       
@@ -618,9 +619,23 @@ export function MoodMap({
         setActiveRouteSteps(errorSteps);
         onNavigationStepsChange?.(errorSteps);
         
+        const routeGenerationMs = Math.round(performance.now() - routeStart);
+
         mixpanel.track("affective_route_calculated", {
           mood,
           duration_minutes: duration,
+          activity,
+          route_generation_failed: true,
+          failure_reason: "no_osrm_candidates",
+
+          candidate_count: candidates.length,
+          valid_candidate_count: 0,
+          acceptable_candidate_count: 0,
+
+          target_distance_km: Number((getSpeedKmh() * (duration / 60)).toFixed(2)),
+          actual_distance_km: 0,
+          duration_error: 1.0,
+
           trajectory_score: 0.0,
           raw_score: -10.0,
           display_score: 0.0,
@@ -630,11 +645,13 @@ export function MoodMap({
           repetition: 0.0,
           sinuosity: 0.0,
           heading_entropy: 0.0,
-          duration_error: 1.0,
-          scenic_park_snapped: false,
-          is_fallback: true,
-          route_generation_failed: true,
-          failure_reason: "no_osrm_candidates"
+
+          poi_count: pois.length,
+          park_count: parks.length,
+          walkway_node_count: walkwayNodes.length,
+          lighting_data_available: litNodes.length > 0,
+          is_night: isNight,
+          route_generation_ms: routeGenerationMs,
         });
 
         setRoutingDistance(0);
@@ -791,11 +808,9 @@ export function MoodMap({
       if (signal.aborted) return;
       
       // Filter out candidates with durationError > 0.25
-      let acceptableRoutes = scoredRoutes.filter((r) => r.durationError <= 0.25);
-      if (acceptableRoutes.length === 0) {
-        // Fallback to all routes if none satisfy the strict mismatch limit
-        acceptableRoutes = scoredRoutes;
-      }
+      const acceptableRoutesRaw = scoredRoutes.filter((r) => r.durationError <= 0.25);
+      const durationFilterFailed = acceptableRoutesRaw.length === 0;
+      let acceptableRoutes = durationFilterFailed ? scoredRoutes : acceptableRoutesRaw;
       
       acceptableRoutes.sort((a, b) => b.score - a.score);
       const winner = acceptableRoutes[0];
@@ -803,21 +818,48 @@ export function MoodMap({
       setActiveWaypoints(winner.waypoints);
       setActiveRouteGeometry(winner.coords);
 
+      const targetKm = getSpeedKmh() * (duration / 60);
+      const routeGenerationMs = Math.round(performance.now() - routeStart);
+
       mixpanel.track("affective_route_calculated", {
         mood,
         duration_minutes: duration,
+        activity,
+        walking_speed: walkingSpeed,
+        running_speed: runningSpeed,
+
+        candidate_count: candidates.length,
+        valid_candidate_count: validResults.length,
+        acceptable_candidate_count: acceptableRoutesRaw.length,
+        duration_filter_failed: durationFilterFailed,
+
+        target_distance_km: Number(targetKm.toFixed(2)),
+        actual_distance_km: Number(winner.totalDist.toFixed(2)),
+        duration_error: Number(winner.durationError.toFixed(3)),
+
         trajectory_score: winner.displayScore,
         raw_score: winner.rawScore,
         display_score: winner.displayScore,
+
         greenery: winner.greenery,
         vitality: winner.vitality,
         safety_penalty: winner.safetyPenalty,
         repetition: winner.repetition,
         sinuosity: winner.sinuosity,
         heading_entropy: winner.headingEntropy,
-        duration_error: winner.durationError,
+
+        poi_count: pois.length,
+        park_count: parks.length,
+        walkway_node_count: walkwayNodes.length,
+        lighting_data_available: litNodes.length > 0,
+        is_night: isNight,
+
         scenic_park_snapped: mood === "Nature Connection" && !!closestPark,
-        is_fallback: false,
+        route_generation_failed: false,
+        failure_reason: null,
+
+        route_variant: routeVariant,
+        route_generation_ms: routeGenerationMs,
       });
       
       if (winner.routeData.legs && winner.routeData.legs[0] && onNavigationStepsChange) {
