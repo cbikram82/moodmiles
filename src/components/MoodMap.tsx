@@ -315,17 +315,44 @@ export function MoodMap({
   const getCandidateWaypoints = (start: LatLng, variantIndex: number, radiusScale: number, closestPark: LatLng | null): LatLng[] => {
     const speedKmh = getSpeedKmh();
     const totalDistanceKm = speedKmh * (duration / 60);
-    let R = (totalDistanceKm / 2.8) * radiusScale;
+    
+    // Adjust base radius scale structurally based on the active mood to ensure visual variance
+    let R_mood_scale = radiusScale;
+    if (mood === "Energy Boost" || mood === "Confidence") {
+      R_mood_scale *= 1.15; // larger paces
+    } else if (mood === "Clear Mind") {
+      R_mood_scale *= 0.85; // compact linear progression
+    } else if (mood === "Nature Connection") {
+      R_mood_scale *= 0.75;
+    }
+    
+    let R = (totalDistanceKm / 2.8) * R_mood_scale;
     
     const isNatureLoop = mood === "Nature Connection";
     if (isNatureLoop) {
       R = Math.min(R, 0.35); // Keep it compact so it fits within the park boundary
     }
     
-    // Annulus headings (0, 120, 240 degrees) rotated by variantIndex * 90 degrees
-    const headings = [0, 120, 240].map(h => h + (variantIndex * 90));
+    // Vary the structural candidate shapes/headings based on active mood to ensure distinct routes
+    let headings = [0, 120, 240];
+    if (mood === "Clear Mind") {
+      // Highly symmetric, linear structures (narrow out-and-back)
+      headings = [15, 165, 195];
+    } else if (mood === "Reflective" || mood === "Creative Spark" || mood === "Escape") {
+      // Highly asymmetric skewed anchors to force winding back alleys and organic sinuosity
+      headings = [35, 145, 275];
+    } else if (mood === "Energy Boost" || mood === "Confidence") {
+      // Skewed diamond progression
+      headings = [45, 165, 285];
+    } else {
+      // Standard Calm / Recovery / Nature Connection
+      headings = [0, 120, 240];
+    }
     
-    return headings.map((theta) => {
+    // Rotate the headings based on variantIndex (0 = 0 deg, 1 = 90 deg, 2 = 180 deg)
+    const rotatedHeadings = headings.map(h => h + (variantIndex * 90));
+    
+    return rotatedHeadings.map((theta) => {
       const latOffset = (R * Math.cos(theta * Math.PI / 180)) / 111;
       const radLat = (start.lat * Math.PI) / 180;
       const lngOffset = (R * Math.sin(theta * Math.PI / 180)) / (111 * Math.cos(radLat));
