@@ -1095,11 +1095,11 @@ export function MoodMap({
     routeVariant,
   ]);
 
-  if (loading || routeLoading) {
+  if (loading) {
     return (
       <div className="flex h-60 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl animate-pulse">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="mt-2 text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">Optimizing affective trajectory...</span>
+        <span className="mt-2 text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">Locating your coordinates...</span>
       </div>
     );
   }
@@ -1131,6 +1131,12 @@ export function MoodMap({
 
       {/* Map container frame - Height increased to h-60 for accessibility */}
       <div className="relative h-60 w-full overflow-hidden rounded-3xl border border-border/60 shadow-lg shadow-black/10">
+        {routeLoading && (
+          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/70 backdrop-blur-md animate-in fade-in duration-300">
+            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            <span className="mt-2 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Optimizing affective trajectory...</span>
+          </div>
+        )}
         {mapTheme !== "cyberpunk" ? (
           <>
             <div ref={mapContainerRef} className="absolute inset-0 h-full w-full bg-background" />
