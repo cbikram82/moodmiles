@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Compass } from "lucide-react";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { mixpanel } from "../lib/mixpanel";
 
 type Mood =
   | "Calm"
@@ -525,6 +526,15 @@ export function MoodMap({
         const fallbackSteps = ["Start walking forward", "Continue along the trail to complete the loop"];
         setActiveRouteSteps(fallbackSteps);
         onNavigationStepsChange?.(fallbackSteps);
+        
+        mixpanel.track("affective_route_calculated", {
+          mood,
+          duration_minutes: duration,
+          trajectory_score: 1.0,
+          scenic_park_snapped: false,
+          is_fallback: true,
+        });
+
         setRoutingDistance(getSpeedKmh() * (duration / 60));
         setRouteLoading(false);
         return;
@@ -648,6 +658,14 @@ export function MoodMap({
       
       setActiveWaypoints(winner.waypoints);
       setActiveRouteGeometry(winner.coords);
+
+      mixpanel.track("affective_route_calculated", {
+        mood,
+        duration_minutes: duration,
+        trajectory_score: winner.score,
+        scenic_park_snapped: winner.coords.length > 0 && mood === "Nature Connection",
+        is_fallback: false,
+      });
       
       if (winner.routeData.legs && winner.routeData.legs[0] && onNavigationStepsChange) {
         const parsedSteps: string[] = [];
@@ -740,6 +758,11 @@ export function MoodMap({
           setRouteCenter({
             lat: e.latlng.lat,
             lng: e.latlng.lng,
+          });
+          mixpanel.track("custom_location_pinned", {
+            mood,
+            duration_minutes: duration,
+            is_nature_connection: mood === "Nature Connection",
           });
         });
       }

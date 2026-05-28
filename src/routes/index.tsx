@@ -992,13 +992,19 @@ function MoodMiles() {
                     { id: "terrain", label: "Terrain Relief" },
                     { id: "cyberpunk", label: "Cyberpunk Grid" },
                   ].map((theme) => {
-                    const active = mapTheme === theme.id || (theme.id === "dark" && mapTheme === "real");
+                    const active = mapTheme === theme.id;
                     return (
                       <button
                         key={theme.id}
                         onClick={() => {
+                          const oldVal = mapTheme;
                           setMapTheme(theme.id);
                           localStorage.setItem("moodmiles_map_theme", theme.id);
+                          mixpanel.track("settings_modified", {
+                            setting_type: "map_theme",
+                            old_value: oldVal,
+                            new_value: theme.id,
+                          });
                         }}
                         className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center justify-center cursor-pointer ${
                           active
@@ -1026,8 +1032,14 @@ function MoodMiles() {
                       <button
                         key={spd}
                         onClick={() => {
+                          const oldVal = walkingSpeed;
                           setWalkingSpeed(spd);
                           localStorage.setItem("moodmiles_walking_speed", spd);
+                          mixpanel.track("settings_modified", {
+                            setting_type: "walking_speed",
+                            old_value: oldVal,
+                            new_value: spd,
+                          });
                         }}
                         className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center gap-0.5 ${
                           walkingSpeed === spd
@@ -1056,8 +1068,14 @@ function MoodMiles() {
                       <button
                         key={spd}
                         onClick={() => {
+                          const oldVal = runningSpeed;
                           setRunningSpeed(spd);
                           localStorage.setItem("moodmiles_running_speed", spd);
+                          mixpanel.track("settings_modified", {
+                            setting_type: "running_speed",
+                            old_value: oldVal,
+                            new_value: spd,
+                          });
                         }}
                         className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center gap-0.5 ${
                           runningSpeed === spd
@@ -1086,8 +1104,14 @@ function MoodMiles() {
                       <button
                         key={prov}
                         onClick={() => {
+                          const oldVal = musicProvider;
                           setMusicProvider(prov);
                           localStorage.setItem("moodmiles_music_provider", prov);
+                          mixpanel.track("settings_modified", {
+                            setting_type: "music_provider",
+                            old_value: oldVal,
+                            new_value: prov,
+                          });
                         }}
                         className={`rounded-xl border p-2.5 text-center transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                           active
@@ -2422,7 +2446,16 @@ function RouteScreen({
 
       <div className="flex gap-3">
         <Button
-          onClick={() => setRouteVariant((prev) => (prev + 1) % 4)}
+          onClick={() => {
+            const nextVariant = (routeVariant + 1) % 4;
+            setRouteVariant(nextVariant);
+            mixpanel.track("loop_variant_rotated", {
+              mood,
+              duration_minutes: duration,
+              original_variant: routeVariant,
+              new_variant: nextVariant,
+            });
+          }}
           className="h-14 flex-1 rounded-2xl border border-border bg-card/40 hover:bg-accent/10 text-foreground text-sm font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <RefreshCw className="h-4 w-4 text-primary animate-spin-slow" />
@@ -3127,6 +3160,27 @@ function ActiveScreen({
   const [breadcrumbs, setBreadcrumbs] = useState<{ lat: number; lng: number }[]>([]);
   const [liveSteps, setLiveSteps] = useState(0);
 
+  const completedRef = useRef(false);
+  const secondsRef = useRef(0);
+  const liveDistanceRef = useRef(0);
+
+  secondsRef.current = seconds;
+  liveDistanceRef.current = liveDistance;
+
+  useEffect(() => {
+    return () => {
+      if (!completedRef.current) {
+        mixpanel.track("walk_abandoned", {
+          mood,
+          duration_minutes: duration,
+          elapsed_seconds: secondsRef.current,
+          distance_completed_km: liveDistanceRef.current,
+          percent_completed: Math.min((secondsRef.current / (duration * 60)) * 100, 100),
+        });
+      }
+    };
+  }, [mood, duration]);
+
   const currentVariant = useMemo(
     () => route.variants[routeVariant] || route.variants[0],
     [route, routeVariant],
@@ -3372,21 +3426,32 @@ function ActiveScreen({
       {/* Active Navigation Control panel */}
       <div className="grid grid-cols-3 gap-3">
         <Button
-          onClick={() => setPaused(!paused)}
+          onClick={() => {
+            const nextPaused = !paused;
+            setPaused(nextPaused);
+            mixpanel.track(nextPaused ? "walk_paused" : "walk_resumed", {
+              mood,
+              duration_minutes: duration,
+              elapsed_seconds: seconds,
+              distance_completed_km: liveDistance,
+              percent_completed: Math.min((seconds / (duration * 60)) * 100, 100),
+            });
+          }}
           className={`h-13 rounded-2xl font-medium border border-border/60 bg-card/50 hover:bg-card/75 text-foreground col-span-1`}
         >
           {paused ? "Resume" : "Pause"}
         </Button>
         <Button
-          onClick={() =>
+          onClick={() => {
+            completedRef.current = true;
             onComplete({
               seconds,
               distanceKm: liveDistance,
               breadcrumbs,
               steps: liveSteps,
               routeVariant,
-            })
-          }
+            });
+          }}
           className="h-13 rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 shadow-md shadow-primary/10 col-span-2"
         >
           Complete Journey
