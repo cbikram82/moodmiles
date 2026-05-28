@@ -10,8 +10,10 @@ mixpanel.init("b7b27a20cbbcc087cdcc6656aa7ea472", {
   ignore_dnt: true, // Bypass DNT settings in browsers like Safari to ensure local testing works
   api_transport: "XHR", // Force standard XHR requests so Capacitor's native bridge intercepts and bypasses webview CORS/tracking blocks
   cross_subdomain_cookie: false, // Prevent cross-subdomain cookie issues under custom protocols like capacitor://
+  api_host: "https://api-eu.mixpanel.com", // Route traffic to the correct EU Data Center endpoint
 });
 
 export { mixpanel };
+
 
 
