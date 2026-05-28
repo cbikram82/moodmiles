@@ -609,31 +609,35 @@ export function MoodMap({
       
       if (validResults.length === 0) {
         if (signal.aborted) return;
-        const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark, 0, walkwayNodes);
-        setActiveWaypoints(fallbackWaypoints);
-        setActiveRouteGeometry([routeCenter, ...fallbackWaypoints, routeCenter]);
-        const fallbackSteps = ["Start walking forward", "Continue along the trail to complete the loop"];
-        setActiveRouteSteps(fallbackSteps);
-        onNavigationStepsChange?.(fallbackSteps);
+        setActiveWaypoints([]);
+        setActiveRouteGeometry([]);
+        const errorSteps = [
+          "We couldn't calculate a safe walkable loop here.",
+          "Try a shorter duration, rotate the route, or choose a different start point."
+        ];
+        setActiveRouteSteps(errorSteps);
+        onNavigationStepsChange?.(errorSteps);
         
         mixpanel.track("affective_route_calculated", {
           mood,
           duration_minutes: duration,
-          trajectory_score: 1.0,
-          raw_score: -5.0,
-          display_score: 1.0,
+          trajectory_score: 0.0,
+          raw_score: -10.0,
+          display_score: 0.0,
           greenery: 0.0,
           vitality: 0.0,
-          safety_penalty: 0.0,
+          safety_penalty: 2.0,
           repetition: 0.0,
-          sinuosity: 1.0,
+          sinuosity: 0.0,
           heading_entropy: 0.0,
           duration_error: 1.0,
           scenic_park_snapped: false,
           is_fallback: true,
+          route_generation_failed: true,
+          failure_reason: "no_osrm_candidates"
         });
 
-        setRoutingDistance(getSpeedKmh() * (duration / 60));
+        setRoutingDistance(0);
         setRouteLoading(false);
         return;
       }
@@ -699,26 +703,31 @@ export function MoodMap({
         const vitality = pois.length > 0 ? (totalVitality / coords.length) : 0.3;
         
         let safetyPenalty = 0;
-        if (isNight && litNodes.length > 0) {
-          let darkCount = 0;
-          coords.forEach((coord) => {
-            let litDist = Infinity;
-            litNodes.forEach((l) => {
-              const d = haversineDistance(coord, l);
-              if (d < litDist) litDist = d;
+        if (isNight) {
+          if (litNodes.length > 0) {
+            let darkCount = 0;
+            coords.forEach((coord) => {
+              let litDist = Infinity;
+              litNodes.forEach((l) => {
+                const d = haversineDistance(coord, l);
+                if (d < litDist) litDist = d;
+              });
+              let poiDist = Infinity;
+              pois.forEach((p) => {
+                const d = haversineDistance(coord, p);
+                if (d < poiDist) poiDist = d;
+              });
+              
+              if (litDist > 0.05 && poiDist > 0.08) {
+                darkCount++;
+              }
             });
-            let poiDist = Infinity;
-            pois.forEach((p) => {
-              const d = haversineDistance(coord, p);
-              if (d < poiDist) poiDist = d;
-            });
-            
-            if (litDist > 0.05 && poiDist > 0.08) {
-              darkCount++;
-            }
-          });
-          const darkRatio = darkCount / coords.length;
-          safetyPenalty = Math.pow(darkRatio, 2.5) * 4.0;
+            const darkRatio = darkCount / coords.length;
+            safetyPenalty = Math.pow(darkRatio, 2.5) * 4.0;
+          } else {
+            // Lighting data is missing entirely at night (uncertainty-aware risk penalty)
+            safetyPenalty += 1.5;
+          }
         }
         
         // O(N) Grid-based repetition calculation (prevents stationary count O(N^2) loops)

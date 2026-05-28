@@ -648,7 +648,7 @@ function useScenicDetector(
       console.warn("Overpass fetch setup failed:", err);
       triggerNominatimFallback();
     }
-  }, [userLocation, enabled]);
+  }, [userLocation, enabled, duration]);
 
   return scenicSpot;
 }
