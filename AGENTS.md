@@ -96,6 +96,13 @@ These are the Mixpanel events currently tracked in this project. **All new Mixpa
 | `walk_started` | User starts tracking their walking or running route | `mood`, `duration_minutes`, `activity`, `route_title`, `route_variant`, `speed` | `src/routes/index.tsx` |
 | `walk_completed` (Value Moment) | User completes their walking/running loop | `mood`, `duration_minutes`, `activity`, `elapsed_seconds`, `distance_km`, `step_count`, `route_variant`, `has_gps_track` | `src/routes/index.tsx` |
 | `walk_survey_submitted` | User submits the post-walk empirical feedback survey | `mood`, `journey_id`, `mood_delta`, `perceived_feeling`, `felt_safe`, `cognitive_restoration`, `environmental_stimulation`, `willingness_to_repeat` | `src/routes/index.tsx` |
+| `loop_variant_rotated` | User rotates/regenerates their projected loop geometry | `mood`, `duration_minutes`, `original_variant`, `new_variant` | `src/routes/index.tsx` |
+| `settings_modified` | User modifies settings configurations in Settings panel | `setting_type`, `old_value`, `new_value` | `src/routes/index.tsx` |
+| `custom_location_pinned` | User clicks on the map to drop a starting pin manually | `mood`, `duration_minutes`, `is_nature_connection` | `src/components/MoodMap.tsx` |
+| `walk_paused` | User pauses active walk tracking | `mood`, `duration_minutes`, `elapsed_seconds`, `distance_completed_km`, `percent_completed` | `src/routes/index.tsx` |
+| `walk_resumed` | User resumes active walk tracking after pause | `mood`, `duration_minutes`, `elapsed_seconds`, `distance_completed_km`, `percent_completed` | `src/routes/index.tsx` |
+| `walk_abandoned` | User leaves/navigates back during active walk without completing | `mood`, `duration_minutes`, `elapsed_seconds`, `distance_completed_km`, `percent_completed` | `src/routes/index.tsx` |
+| `affective_route_calculated` | Client-side routing engine Snaps loop variants via OSRM | `mood`, `duration_minutes`, `trajectory_score`, `scenic_park_snapped`, `is_fallback` | `src/components/MoodMap.tsx` |
 
 ---
 
