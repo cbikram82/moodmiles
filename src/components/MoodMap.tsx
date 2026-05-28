@@ -433,121 +433,173 @@ export function MoodMap({
         { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 0.85, closestPark), label: "Compact" }
       ];
       
-      // Rank the candidates client-side using direct waypoint coordinates first to protect OSRM public API rate limits
-      const rankedCandidates = candidates.map((cand) => {
-        let greenScore = 0;
-        let vitalityScore = 0;
-        let safetyPenalty = 0;
+      // Fetch OSRM coordinates for all 3 candidates in parallel using the abort signal
+      const routePromises = candidates.map(async (cand) => {
+        const fullCoordinates = [routeCenter, ...cand.waypoints, routeCenter];
+        const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
+        const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
         
-        cand.waypoints.forEach((wp) => {
-          // Greenery
-          let minParkDist = Infinity;
-          parks.forEach((p) => {
-            const d = haversineDistance(wp, p);
-            if (d < minParkDist) minParkDist = d;
-          });
-          greenScore += Math.exp(-minParkDist / 0.2);
-          
-          // Vitality
-          let minPoiDist = Infinity;
-          pois.forEach((poi) => {
-            const d = haversineDistance(wp, poi);
-            if (d < minPoiDist) minPoiDist = d;
-          });
-          vitalityScore += Math.exp(-minPoiDist / 0.15);
-          
-          // Safety at night
-          if (isNight) {
-            let minLitDist = Infinity;
-            litNodes.forEach((l) => {
-              const d = haversineDistance(wp, l);
-              if (d < minLitDist) minLitDist = d;
-            });
-            
-            if (minLitDist > 0.05 && minPoiDist > 0.08) {
-              safetyPenalty += 1.0;
-            }
-          }
+        try {
+          const res = await fetch(osrmUrl, { signal });
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (data.code !== "Ok" || !data.routes || !data.routes[0]) return null;
+          return { waypoints: cand.waypoints, routeData: data.routes[0] };
+        } catch {
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(routePromises);
+      const validResults = results.filter((r) => r !== null) as { waypoints: LatLng[]; routeData: any }[];
+      
+      if (validResults.length === 0) {
+        const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark);
+        setActiveWaypoints(fallbackWaypoints);
+        setActiveRouteGeometry([routeCenter, ...fallbackWaypoints, routeCenter]);
+        setActiveRouteSteps(["Start walking forward", "Continue along the trail to complete the loop"]);
+        setRoutingDistance(getSpeedKmh() * (duration / 60));
+        setRouteLoading(false);
+        return;
+      }
+      
+      // Score each successfully retrieved route mathematically
+      const scoredRoutes = validResults.map((res) => {
+        const route = res.routeData;
+        const coords = route.geometry.coordinates.map((c: any) => ({ lat: c[1], lng: c[0] })) as LatLng[];
+        const totalDist = route.distance / 1000;
+        
+        const directDist = haversineDistance(routeCenter, res.waypoints[0]) +
+                           haversineDistance(res.waypoints[0], res.waypoints[1]) +
+                           haversineDistance(res.waypoints[1], res.waypoints[2]) +
+                           haversineDistance(res.waypoints[2], routeCenter);
+        const sinuosity = totalDist / (directDist || 1);
+        
+        const headings: number[] = [];
+        for (let i = 0; i < coords.length - 1; i++) {
+          const dx = coords[i+1].lng - coords[i].lng;
+          const dy = coords[i+1].lat - coords[i].lat;
+          let heading = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (heading < 0) heading += 360;
+          headings.push(heading);
+        }
+        
+        const bins = new Array(8).fill(0);
+        headings.forEach((h) => {
+          const binIdx = Math.floor(h / 45) % 8;
+          bins[binIdx]++;
         });
         
-        const avgGreen = greenScore / 3;
-        const avgVitality = vitalityScore / 3;
-        const avgSafetyPen = (safetyPenalty / 3) * 4.0;
+        let entropy = 0;
+        const totalSegments = headings.length || 1;
+        bins.forEach((count) => {
+          const p = count / totalSegments;
+          if (p > 0) entropy -= p * Math.log2(p);
+        });
+        
+        let totalGreenScore = 0;
+        coords.forEach((coord) => {
+          let minDist = Infinity;
+          if (parks.length > 0) {
+            parks.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < minDist) minDist = d;
+            });
+          }
+          totalGreenScore += Math.exp(-minDist / 0.2);
+        });
+        // Default to high scenery for Nature Connection if Overpass is pending
+        const greenery = parks.length > 0 ? (totalGreenScore / coords.length) : (mood === "Nature Connection" ? 0.8 : 0.5);
+        
+        let totalVitality = 0;
+        coords.forEach((coord) => {
+          let minDist = Infinity;
+          if (pois.length > 0) {
+            pois.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < minDist) minDist = d;
+            });
+          }
+          totalVitality += Math.exp(-minDist / 0.15);
+        });
+        const vitality = pois.length > 0 ? (totalVitality / coords.length) : 0.3;
+        
+        let safetyPenalty = 0;
+        if (isNight && litNodes.length > 0) {
+          let darkCount = 0;
+          coords.forEach((coord) => {
+            let litDist = Infinity;
+            litNodes.forEach((l) => {
+              const d = haversineDistance(coord, l);
+              if (d < litDist) litDist = d;
+            });
+            let poiDist = Infinity;
+            pois.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < poiDist) poiDist = d;
+            });
+            
+            if (litDist > 0.05 && poiDist > 0.08) {
+              darkCount++;
+            }
+          });
+          const darkRatio = darkCount / coords.length;
+          safetyPenalty = Math.pow(darkRatio, 2.5) * 4.0;
+        }
+        
+        let repetition = 0;
+        for (let i = 0; i < coords.length; i++) {
+          for (let j = i + 10; j < coords.length; j++) {
+            if (haversineDistance(coords[i], coords[j]) < 0.01) repetition += 0.5;
+          }
+        }
         
         let finalScore = 0;
         if (mood === "Calm") {
-          finalScore = avgGreen * 3.5 - avgVitality * 1.5 - avgSafetyPen;
+          finalScore = greenery * 3.5 - vitality * 1.5 - sinuosity * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Clear Mind") {
-          finalScore = -avgVitality * 1.0 + avgGreen * 1.0 - avgSafetyPen;
+          finalScore = -entropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetition;
         } else if (mood === "Energy Boost" || mood === "Confidence") {
-          finalScore = avgVitality * 2.5 + avgGreen * 0.5 - avgSafetyPen;
+          finalScore = vitality * 2.5 + sinuosity * 1.0 + greenery * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Reflective" || mood === "Creative Spark" || mood === "Escape") {
-          finalScore = avgGreen * 2.0 - avgVitality * 0.5 - avgSafetyPen;
+          finalScore = sinuosity * 3.5 + entropy * 2.0 - vitality * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Nature Connection") {
-          finalScore = avgGreen * 4.5 - avgSafetyPen;
+          finalScore = greenery * 4.5 + sinuosity * 0.5 - safetyPenalty - repetition;
         } else {
-          finalScore = avgGreen * 1.5 - avgSafetyPen;
+          finalScore = greenery * 1.5 + sinuosity * 0.5 - safetyPenalty - repetition;
         }
         
-        return { ...cand, score: finalScore };
+        // Offset shift to ensure we always get a positive organic trajectory score (e.g. 5.5 to 9.8 pts)
+        finalScore = Math.max(0.5, finalScore + 6.0);
+        
+        return { waypoints: res.waypoints, routeData: res.routeData, coords, score: finalScore };
       });
       
-      // Sort candidates descending and pick the winner
-      rankedCandidates.sort((a, b) => b.score - a.score);
-      const winner = rankedCandidates[0];
+      scoredRoutes.sort((a, b) => b.score - a.score);
+      const winner = scoredRoutes[0];
       
-      // Make EXACTLY ONE OSRM query for the winning candidate
-      const fullCoordinates = [routeCenter, ...winner.waypoints, routeCenter];
-      const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-      const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
+      setActiveWaypoints(winner.waypoints);
+      setActiveRouteGeometry(winner.coords);
       
-      try {
-        const res = await fetch(osrmUrl, { signal });
-        if (!res.ok) throw new Error("OSRM status: " + res.status);
-        const data = await res.json();
-        
-        if (data.code === "Ok" && data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          const coords = route.geometry.coordinates.map((c: any) => ({ lat: c[1], lng: c[0] })) as LatLng[];
-          
-          setActiveWaypoints(winner.waypoints);
-          setActiveRouteGeometry(coords);
-          
-          if (route.legs && route.legs[0] && onNavigationStepsChange) {
-            const parsedSteps: string[] = [];
-            route.legs.forEach((leg: any) => {
-              if (leg.steps) {
-                leg.steps.forEach((step: any) => {
-                  const parsed = parseOSRMStep(step);
-                  if (parsed && !parsedSteps.includes(parsed)) {
-                    parsedSteps.push(parsed);
-                  }
-                });
+      if (winner.routeData.legs && winner.routeData.legs[0] && onNavigationStepsChange) {
+        const parsedSteps: string[] = [];
+        winner.routeData.legs.forEach((leg: any) => {
+          if (leg.steps) {
+            leg.steps.forEach((step: any) => {
+              const parsed = parseOSRMStep(step);
+              if (parsed && !parsedSteps.includes(parsed)) {
+                parsedSteps.push(parsed);
               }
             });
-            parsedSteps.push(`Calculated Trajectory Score: ${winner.score.toFixed(2)} pts`);
-            setActiveRouteSteps(parsedSteps);
-            onNavigationStepsChange(parsedSteps);
           }
-          
-          setRoutingDistance(route.distance / 1000);
-        } else {
-          throw new Error("OSRM Failed status: " + data.code);
-        }
-      } catch (err: any) {
-        if (err.name === "AbortError") {
-          return; // Suppress aborted fetches gracefully
-        }
-        console.warn("OSRM routing failed, drawing straight fallback:", err.message);
-        
-        // Draw straight line fallback
-        setActiveWaypoints(winner.waypoints);
-        setActiveRouteGeometry([routeCenter, ...winner.waypoints, routeCenter]);
-        setActiveRouteSteps(["Start walking forward", "Continue along the trail to complete the loop"]);
-        setRoutingDistance(getSpeedKmh() * (duration / 60));
-      } finally {
-        setRouteLoading(false);
+        });
+        parsedSteps.push(`Calculated Trajectory Score: ${winner.score.toFixed(2)} pts`);
+        setActiveRouteSteps(parsedSteps);
+        onNavigationStepsChange(parsedSteps);
       }
+      
+      setRoutingDistance(winner.routeData.distance / 1000);
+      setRouteLoading(false);
     };
     
     calculateAffectiveRoute();
