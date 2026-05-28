@@ -401,7 +401,7 @@ export function MoodMap({
 
   // Computational Psychogeography ranking & OSRM evaluator
   useEffect(() => {
-    if (!routeCenter || !overpassData) return;
+    if (!routeCenter) return;
     
     const controller = new AbortController();
     const signal = controller.signal;
@@ -410,10 +410,14 @@ export function MoodMap({
       setRouteLoading(true);
       const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
       
+      const pois = overpassData?.pois || [];
+      const litNodes = overpassData?.litNodes || [];
+      const parks = overpassData?.parks || [];
+      
       let closestPark: LatLng | null = null;
-      if (overpassData.parks.length > 0) {
+      if (parks.length > 0) {
         let minDist = Infinity;
-        overpassData.parks.forEach((p) => {
+        parks.forEach((p) => {
           const dist = haversineDistance(routeCenter, p);
           if (dist < minDist) {
             minDist = dist;
@@ -438,7 +442,7 @@ export function MoodMap({
         cand.waypoints.forEach((wp) => {
           // Greenery
           let minParkDist = Infinity;
-          overpassData.parks.forEach((p) => {
+          parks.forEach((p) => {
             const d = haversineDistance(wp, p);
             if (d < minParkDist) minParkDist = d;
           });
@@ -446,7 +450,7 @@ export function MoodMap({
           
           // Vitality
           let minPoiDist = Infinity;
-          overpassData.pois.forEach((poi) => {
+          pois.forEach((poi) => {
             const d = haversineDistance(wp, poi);
             if (d < minPoiDist) minPoiDist = d;
           });
@@ -455,7 +459,7 @@ export function MoodMap({
           // Safety at night
           if (isNight) {
             let minLitDist = Infinity;
-            overpassData.litNodes.forEach((l) => {
+            litNodes.forEach((l) => {
               const d = haversineDistance(wp, l);
               if (d < minLitDist) minLitDist = d;
             });
