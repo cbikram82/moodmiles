@@ -153,6 +153,7 @@ export function MoodMap({
   const lastSpokenMilestoneDistanceRef = useRef<number>(0);
   const lastWaypointHapticIndexRef = useRef<number>(-1);
   const breadcrumbsRef = useRef<LatLng[]>([]);
+  const lastPositionTimestampRef = useRef<number>(0);
 
   // Helper to calculate km/h based on user-configured speeds
   const getSpeedKmh = (): number => {
@@ -218,6 +219,12 @@ export function MoodMap({
       // 2A. Active watch tracking - updates liveLocation, NEVER overrides routeCenter!
       watchId = navigator.geolocation.watchPosition(
         (position) => {
+          // GPS Accuracy filter (exclude noise > 30m)
+          if (position.coords.accuracy && position.coords.accuracy > 30) {
+            console.warn(`[GPS Filter] Ignored inaccurate reading. Accuracy: ${position.coords.accuracy.toFixed(1)}m.`);
+            return;
+          }
+
           const newPos = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -233,10 +240,35 @@ export function MoodMap({
             next.push(newPos);
             breadcrumbsRef.current = next;
             setBreadcrumbs(next);
+            lastPositionTimestampRef.current = position.timestamp;
           } else {
             const last = next[next.length - 1];
             const dist = haversineDistance(last, newPos);
-            if (dist > 0.003) {
+            
+            // GPS step minimum distance: 8m (0.008 km) instead of 3m to avoid stationary jitter overcounting
+            if (dist > 0.008) {
+              // Speed sanity check: implied speed since last timestamp
+              let isValidSpeed = true;
+              if (lastPositionTimestampRef.current > 0) {
+                const timeDiffSeconds = (position.timestamp - lastPositionTimestampRef.current) / 1000;
+                if (timeDiffSeconds > 0) {
+                  const impliedSpeedKmh = (dist * 3600) / timeDiffSeconds;
+                  const maxSpeed = (activity === "Run" || activity === "Sprint" || activity === "Jog") ? 25 : 12;
+                  if (impliedSpeedKmh > maxSpeed) {
+                    isValidSpeed = false;
+                  }
+                }
+              }
+
+              if (!isValidSpeed) {
+                const calculatedImpliedSpeed = lastPositionTimestampRef.current > 0 
+                  ? ((dist * 3600) / ((position.timestamp - lastPositionTimestampRef.current) / 1000)) 
+                  : 0;
+                console.warn(`[GPS Filter] Ignored jitter reading. Implied speed: ${calculatedImpliedSpeed.toFixed(1)} km/h.`);
+                return;
+              }
+
+              lastPositionTimestampRef.current = position.timestamp;
               next.push(newPos);
               breadcrumbsRef.current = next;
               setBreadcrumbs(next);
@@ -325,9 +357,17 @@ export function MoodMap({
     pois: { lat: number; lng: number }[];
     litNodes: { lat: number; lng: number }[];
     parks: { lat: number; lng: number; name: string }[];
+    walkwayNodes: { lat: number; lng: number }[];
   } | null>(null);
 
-  const getCandidateWaypoints = (start: LatLng, variantIndex: number, radiusScale: number, closestPark: LatLng | null): LatLng[] => {
+  const getCandidateWaypoints = (
+    start: LatLng, 
+    variantIndex: number, 
+    radiusScale: number, 
+    closestPark: LatLng | null,
+    headingJitter: number = 0,
+    walkwayNodes: LatLng[] = []
+  ): LatLng[] => {
     const speedKmh = getSpeedKmh();
     const totalDistanceKm = speedKmh * (duration / 60);
     
@@ -364,8 +404,8 @@ export function MoodMap({
       headings = [0, 120, 240];
     }
     
-    // Rotate the headings based on variantIndex (0 = 0 deg, 1 = 90 deg, 2 = 180 deg)
-    const rotatedHeadings = headings.map(h => h + (variantIndex * 90));
+    // Rotate the headings based on variantIndex (0 = 0 deg, 1 = 90 deg, 2 = 180 deg) and headingJitter
+    const rotatedHeadings = headings.map(h => h + (variantIndex * 90) + headingJitter);
     
     return rotatedHeadings.map((theta) => {
       const latOffset = (R * Math.cos(theta * Math.PI / 180)) / 111;
@@ -378,11 +418,25 @@ export function MoodMap({
       };
       
       if (isNatureLoop && closestPark) {
-        // Blended shift: pull waypoint anchor coordinates into the park boundary!
-        wp = {
-          lat: wp.lat * 0.25 + closestPark.lat * 0.75,
-          lng: wp.lng * 0.25 + closestPark.lng * 0.75,
-        };
+        // If we have actual walkable walkway nodes returned inside/around the park, snap directly to them
+        if (walkwayNodes.length > 0) {
+          let closestWp = wp;
+          let minDist = Infinity;
+          walkwayNodes.forEach((node) => {
+            const dist = haversineDistance(wp, node);
+            if (dist < minDist) {
+              minDist = dist;
+              closestWp = node;
+            }
+          });
+          wp = closestWp;
+        } else {
+          // Centroid fallback if no footways returned
+          wp = {
+            lat: wp.lat * 0.25 + closestPark.lat * 0.75,
+            lng: wp.lng * 0.25 + closestPark.lng * 0.75,
+          };
+        }
       }
       
       return wp;
@@ -401,14 +455,26 @@ export function MoodMap({
       }
 
       try {
+        // Compute duration-derived park search radius bounds
+        const d = duration || 30;
+        const radius = d <= 15 ? 1200 : d <= 30 ? 2200 : d <= 45 ? 3000 : 3500;
+
         // Query a 1km bounding box for cafes, restaurants, lit streets, transit stops
         const box = `${routeCenter.lat - 0.009},${routeCenter.lng - 0.009},${routeCenter.lat + 0.009},${routeCenter.lng + 0.009}`;
         const query = `[out:json][timeout:5];(` +
           `node(${box})[amenity~"cafe|restaurant|pub|shop|marketplace"];` +
           `node(${box})[highway=bus_stop];` +
           `node(${box})[lit=yes];` +
-          `nwr(around:8000,${routeCenter.lat},${routeCenter.lng})[leisure=park];` +
-          `nwr(around:8000,${routeCenter.lat},${routeCenter.lng})[leisure=nature_reserve];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[leisure=park];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[leisure=nature_reserve];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[leisure=garden];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[leisure=recreation_ground];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[landuse=grass];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[landuse=recreation_ground];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[natural=wood];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[natural=heath];` +
+          `nwr(around:${radius},${routeCenter.lat},${routeCenter.lng})[natural=grassland];` +
+          `way(around:${radius},${routeCenter.lat},${routeCenter.lng})[highway~"footway|path|pedestrian|track"];` +
           `);out center;`;
           
         const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
@@ -418,6 +484,7 @@ export function MoodMap({
         const pois: LatLng[] = [];
         const litNodes: LatLng[] = [];
         const parks: { lat: number; lng: number; name: string }[] = [];
+        const walkwayNodes: LatLng[] = [];
         
         if (data && data.elements) {
           data.elements.forEach((el: any) => {
@@ -431,23 +498,36 @@ export function MoodMap({
             if (el.tags?.lit === "yes") {
               litNodes.push({ lat, lng });
             }
-            if (el.tags?.leisure === "park" || el.tags?.leisure === "nature_reserve") {
-              parks.push({ lat, lng, name: el.tags.name || "Park" });
+            if (
+              el.tags?.leisure === "park" || 
+              el.tags?.leisure === "nature_reserve" ||
+              el.tags?.leisure === "garden" ||
+              el.tags?.leisure === "recreation_ground" ||
+              el.tags?.landuse === "grass" ||
+              el.tags?.landuse === "recreation_ground" ||
+              el.tags?.natural === "wood" ||
+              el.tags?.natural === "heath" ||
+              el.tags?.natural === "grassland"
+            ) {
+              parks.push({ lat, lng, name: el.tags.name || "Park/Green Area" });
+            }
+            if (el.tags?.highway && ["footway", "path", "pedestrian", "track"].includes(el.tags.highway)) {
+              walkwayNodes.push({ lat, lng });
             }
           });
         }
         
-        const result = { pois, litNodes, parks };
+        const result = { pois, litNodes, parks, walkwayNodes };
         overpassRouteCache.set(cacheKey, result);
         setOverpassData(result);
       } catch (err) {
         console.warn("Local Overpass fetch failed, continuing with empty context:", err);
-        setOverpassData({ pois: [], litNodes: [], parks: [] });
+        setOverpassData({ pois: [], litNodes: [], parks: [], walkwayNodes: [] });
       }
     };
     
     loadOverpassData();
-  }, [routeCenter]);
+  }, [routeCenter, duration]);
 
   // Computational Psychogeography ranking & OSRM evaluator (debounced to avoid rate limiting 429 errors)
   useEffect(() => {
@@ -464,6 +544,7 @@ export function MoodMap({
       const pois = overpassData?.pois || [];
       const litNodes = overpassData?.litNodes || [];
       const parks = overpassData?.parks || [];
+      const walkwayNodes = overpassData?.walkwayNodes || [];
       
       let closestPark: LatLng | null = null;
       if (parks.length > 0) {
@@ -477,12 +558,20 @@ export function MoodMap({
         });
       }
       
-      // Candidate options (stochastic variations)
-      const candidates = [
-        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark), label: "Standard" },
-        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 1.15, closestPark), label: "Expanded" },
-        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 0.85, closestPark), label: "Compact" }
-      ];
+      // 12 Candidate options (stochastic variations with scales and jitters)
+      const candidates: { waypoints: LatLng[]; label: string }[] = [];
+      const scales = [0.75, 0.90, 1.05, 1.20];
+      const jitters = [-15, 0, 15];
+
+      scales.forEach((scale) => {
+        jitters.forEach((jitter) => {
+          const waypoints = getCandidateWaypoints(routeCenter, routeVariant, scale, closestPark, jitter, walkwayNodes);
+          candidates.push({ 
+            waypoints, 
+            label: `Scale ${scale.toFixed(2)} / Jitter ${jitter}°` 
+          });
+        });
+      });
       
       // Fetch OSRM coordinates for candidates sequentially with a small delay to avoid hitting the 429 rate limit
       const results: { waypoints: LatLng[]; routeData: any }[] = [];
@@ -520,7 +609,7 @@ export function MoodMap({
       
       if (validResults.length === 0) {
         if (signal.aborted) return;
-        const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark);
+        const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark, 0, walkwayNodes);
         setActiveWaypoints(fallbackWaypoints);
         setActiveRouteGeometry([routeCenter, ...fallbackWaypoints, routeCenter]);
         const fallbackSteps = ["Start walking forward", "Continue along the trail to complete the loop"];
@@ -531,6 +620,15 @@ export function MoodMap({
           mood,
           duration_minutes: duration,
           trajectory_score: 1.0,
+          raw_score: -5.0,
+          display_score: 1.0,
+          greenery: 0.0,
+          vitality: 0.0,
+          safety_penalty: 0.0,
+          repetition: 0.0,
+          sinuosity: 1.0,
+          heading_entropy: 0.0,
+          duration_error: 1.0,
           scenic_park_snapped: false,
           is_fallback: true,
         });
@@ -567,11 +665,11 @@ export function MoodMap({
           bins[binIdx]++;
         });
         
-        let entropy = 0;
+        let headingEntropy = 0;
         const totalSegments = headings.length || 1;
         bins.forEach((count) => {
           const p = count / totalSegments;
-          if (p > 0) entropy -= p * Math.log2(p);
+          if (p > 0) headingEntropy -= p * Math.log2(p);
         });
         
         let totalGreenScore = 0;
@@ -585,7 +683,6 @@ export function MoodMap({
           }
           totalGreenScore += Math.exp(-minDist / 0.2);
         });
-        // Default to high scenery for Nature Connection if Overpass is pending
         const greenery = parks.length > 0 ? (totalGreenScore / coords.length) : (mood === "Nature Connection" ? 0.8 : 0.5);
         
         let totalVitality = 0;
@@ -624,37 +721,75 @@ export function MoodMap({
           safetyPenalty = Math.pow(darkRatio, 2.5) * 4.0;
         }
         
+        // O(N) Grid-based repetition calculation (prevents stationary count O(N^2) loops)
         let repetition = 0;
-        for (let i = 0; i < coords.length; i++) {
-          for (let j = i + 10; j < coords.length; j++) {
-            if (haversineDistance(coords[i], coords[j]) < 0.01) repetition += 0.5;
+        const visitedCells = new Map<string, number>();
+        coords.forEach((coord, idx) => {
+          const cell = `${coord.lat.toFixed(4)},${coord.lng.toFixed(4)}`;
+          if (visitedCells.has(cell)) {
+            const lastIdx = visitedCells.get(cell)!;
+            // Exclude adjacent coords within 15 samples of each other to avoid natural pacing repetitions
+            if (idx - lastIdx > 15) {
+              repetition += 0.5;
+            }
           }
-        }
+          visitedCells.set(cell, idx);
+        });
+        
+        // Strict Duration / Distance mismatch penalty
+        const targetKm = getSpeedKmh() * (duration / 60);
+        const durationError = Math.abs(totalDist - targetKm) / targetKm;
         
         let finalScore = 0;
         if (mood === "Calm") {
           finalScore = greenery * 3.5 - vitality * 1.5 - sinuosity * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Clear Mind") {
-          finalScore = -entropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetition;
+          finalScore = -headingEntropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetition;
         } else if (mood === "Energy Boost" || mood === "Confidence") {
           finalScore = vitality * 2.5 + sinuosity * 1.0 + greenery * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Reflective" || mood === "Creative Spark" || mood === "Escape") {
-          finalScore = sinuosity * 3.5 + entropy * 2.0 - vitality * 0.5 - safetyPenalty - repetition;
+          finalScore = sinuosity * 3.5 + headingEntropy * 2.0 - vitality * 0.5 - safetyPenalty - repetition;
         } else if (mood === "Nature Connection") {
           finalScore = greenery * 4.5 + sinuosity * 0.5 - safetyPenalty - repetition;
         } else {
           finalScore = greenery * 1.5 + sinuosity * 0.5 - safetyPenalty - repetition;
         }
         
-        // Offset shift to ensure we always get a positive organic trajectory score (e.g. 5.5 to 9.8 pts)
-        finalScore = Math.max(0.5, finalScore + 6.0);
+        // Apply duration error penalty strongly
+        finalScore -= durationError * 4.0;
+
+        const rawScore = finalScore;
+        const displayScore = Math.max(0.5, finalScore + 6.0);
         
-        return { waypoints: res.waypoints, routeData: res.routeData, coords, score: finalScore };
+        return { 
+          waypoints: res.waypoints, 
+          routeData: res.routeData, 
+          coords, 
+          score: displayScore, 
+          rawScore,
+          displayScore,
+          greenery,
+          vitality,
+          safetyPenalty,
+          repetition,
+          sinuosity,
+          headingEntropy,
+          durationError,
+          totalDist
+        };
       });
       
       if (signal.aborted) return;
-      scoredRoutes.sort((a, b) => b.score - a.score);
-      const winner = scoredRoutes[0];
+      
+      // Filter out candidates with durationError > 0.25
+      let acceptableRoutes = scoredRoutes.filter((r) => r.durationError <= 0.25);
+      if (acceptableRoutes.length === 0) {
+        // Fallback to all routes if none satisfy the strict mismatch limit
+        acceptableRoutes = scoredRoutes;
+      }
+      
+      acceptableRoutes.sort((a, b) => b.score - a.score);
+      const winner = acceptableRoutes[0];
       
       setActiveWaypoints(winner.waypoints);
       setActiveRouteGeometry(winner.coords);
@@ -662,8 +797,17 @@ export function MoodMap({
       mixpanel.track("affective_route_calculated", {
         mood,
         duration_minutes: duration,
-        trajectory_score: winner.score,
-        scenic_park_snapped: winner.coords.length > 0 && mood === "Nature Connection",
+        trajectory_score: winner.displayScore,
+        raw_score: winner.rawScore,
+        display_score: winner.displayScore,
+        greenery: winner.greenery,
+        vitality: winner.vitality,
+        safety_penalty: winner.safetyPenalty,
+        repetition: winner.repetition,
+        sinuosity: winner.sinuosity,
+        heading_entropy: winner.headingEntropy,
+        duration_error: winner.durationError,
+        scenic_park_snapped: mood === "Nature Connection" && !!closestPark,
         is_fallback: false,
       });
       
@@ -684,7 +828,7 @@ export function MoodMap({
         onNavigationStepsChange(parsedSteps);
       }
       
-      setRoutingDistance(winner.routeData.distance / 1000);
+      setRoutingDistance(winner.totalDist);
       setRouteLoading(false);
       };
       

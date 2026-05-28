@@ -420,6 +420,7 @@ const overpassGeocodingCache = new Map<string, any>();
 function useScenicDetector(
   userLocation: { lat: number; lng: number } | null,
   enabled: boolean = true,
+  duration: number | null = null,
 ): {
   name: string;
   isPark: boolean;
@@ -561,20 +562,25 @@ function useScenicDetector(
       }
     };
 
-    // 2. OpenStreetMap Overpass API call: extremely granular search for any parks, commons, recreation grounds, gardens, forests, woods, meadows within 8000m (5 miles)
+    // 2. OpenStreetMap Overpass API call: granular search for parks, woods, gardens within duration-derived reachable radius bounds
     try {
+      const d = duration || 30;
+      const radius = d <= 15 ? 1200 : d <= 30 ? 2200 : d <= 45 ? 3000 : 3500;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:5];(` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=park];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=recreation_ground];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=garden];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[leisure=common];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[boundary=national_park];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=forest];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=meadow];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=recreation_ground];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[landuse=village_green];` +
-        `nwr(around:8000,${userLocation.lat},${userLocation.lng})[natural=wood];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[leisure=park];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[leisure=nature_reserve];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[leisure=recreation_ground];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[leisure=garden];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[leisure=common];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[boundary=national_park];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[landuse=forest];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[landuse=meadow];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[landuse=grass];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[landuse=recreation_ground];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[landuse=village_green];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[natural=wood];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[natural=heath];` +
+        `nwr(around:${radius},${userLocation.lat},${userLocation.lng})[natural=grassland];` +
         `);out center;`;
 
       fetch(overpassUrl)
@@ -736,7 +742,7 @@ function MoodMiles() {
 
   // Geolocated / Custom Location states hoisted to parent so it is shared across both planning and active screens
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const scenicSpot = useScenicDetector(userLocation, step === "landing" || step === "mood");
+  const scenicSpot = useScenicDetector(userLocation, step === "landing" || step === "mood", duration);
   const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
   const [locationName, setLocationName] = useState<string>("Detecting location...");
   const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
