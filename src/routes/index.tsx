@@ -46,6 +46,7 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { CapacitorPedometer } from "@capgo/capacitor-pedometer";
 import logoUrl from "../logo.png";
+import { mixpanel } from "@/lib/mixpanel";
 
 export const Route = createFileRoute("/")({
   component: MoodMiles,
@@ -414,8 +415,11 @@ const SCENIC_HOTSPOTS = [
   { name: "Central Park, New York", lat: 40.7851, lng: -73.9683, radiusMiles: 2 },
 ];
 
+const overpassGeocodingCache = new Map<string, any>();
+
 function useScenicDetector(
   userLocation: { lat: number; lng: number } | null,
+  enabled: boolean = true,
 ): {
   name: string;
   isPark: boolean;
@@ -434,8 +438,14 @@ function useScenicDetector(
   } | null>(null);
 
   useEffect(() => {
-    if (!userLocation) {
+    if (!userLocation || !enabled) {
       setScenicSpot(null);
+      return;
+    }
+
+    const cacheKey = `${userLocation.lat.toFixed(3)},${userLocation.lng.toFixed(3)}`;
+    if (overpassGeocodingCache.has(cacheKey)) {
+      setScenicSpot(overpassGeocodingCache.get(cacheKey));
       return;
     }
 
@@ -447,13 +457,15 @@ function useScenicDetector(
 
     if (matchedHotspot) {
       const isPark = matchedHotspot.name.toLowerCase().includes("park");
-      setScenicSpot({
+      const res = {
         name: matchedHotspot.name,
         isPark,
         parkName: isPark ? matchedHotspot.name : "",
         lat: matchedHotspot.lat,
         lng: matchedHotspot.lng,
-      });
+      };
+      overpassGeocodingCache.set(cacheKey, res);
+      setScenicSpot(res);
       return;
     }
 
@@ -522,24 +534,29 @@ function useScenicDetector(
               if (isScenic) {
                 const parsedName =
                   detectedPark || neighborhood || county || district || "Beautiful Scenic Spot";
-                setScenicSpot({
+                const res = {
                   name: parsedName,
                   isPark: !!detectedPark,
                   parkName: detectedPark || "",
                   lat: userLocation.lat,
                   lng: userLocation.lng,
-                });
+                };
+                overpassGeocodingCache.set(cacheKey, res);
+                setScenicSpot(res);
               } else {
+                overpassGeocodingCache.set(cacheKey, null);
                 setScenicSpot(null);
               }
             }
           })
           .catch((err) => {
             console.warn("Reverse geocoding scenic lookup failed:", err.message);
+            overpassGeocodingCache.set(cacheKey, null);
             setScenicSpot(null);
           });
       } catch (err) {
         console.warn("Reverse geocoding initiation failed:", err);
+        overpassGeocodingCache.set(cacheKey, null);
         setScenicSpot(null);
       }
     };
@@ -601,14 +618,16 @@ function useScenicDetector(
                 distMiles: p.dist,
               }));
 
-              setScenicSpot({
+              const res = {
                 name: name,
                 isPark: true,
                 parkName: name,
                 lat: closestPark.elLat,
                 lng: closestPark.elLng,
                 nearbyParks: topParks,
-              });
+              };
+              overpassGeocodingCache.set(cacheKey, res);
+              setScenicSpot(res);
               return;
             }
           }
@@ -623,7 +642,7 @@ function useScenicDetector(
       console.warn("Overpass fetch setup failed:", err);
       triggerNominatimFallback();
     }
-  }, [userLocation]);
+  }, [userLocation, enabled]);
 
   return scenicSpot;
 }
@@ -717,7 +736,7 @@ function MoodMiles() {
 
   // Geolocated / Custom Location states hoisted to parent so it is shared across both planning and active screens
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const scenicSpot = useScenicDetector(userLocation);
+  const scenicSpot = useScenicDetector(userLocation, step === "landing" || step === "mood");
   const [usingCustomLocation, setUsingCustomLocation] = useState<boolean>(false);
   const [locationName, setLocationName] = useState<string>("Detecting location...");
   const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -747,6 +766,31 @@ function MoodMiles() {
   }, [usingCustomLocation, userLocation]);
 
   const route = useMemo(() => (mood ? ROUTES[mood] : null), [mood]);
+
+  // Mixpanel Walk Telemetry tracking
+  useEffect(() => {
+    if (step === "active" && route && mood && duration && activity) {
+      mixpanel.track("walk_started", {
+        mood,
+        duration_minutes: duration,
+        activity,
+        route_title: route.title,
+        route_variant: routeVariant,
+        speed: activity === "Walk" ? walkingSpeed : runningSpeed,
+      });
+    } else if (step === "recap" && journeyData && mood && duration && activity) {
+      mixpanel.track("walk_completed", {
+        mood,
+        duration_minutes: duration,
+        activity,
+        elapsed_seconds: journeyData.seconds,
+        distance_km: journeyData.distanceKm,
+        step_count: journeyData.steps || 0,
+        route_variant: journeyData.routeVariant,
+        has_gps_track: journeyData.breadcrumbs.length > 0,
+      });
+    }
+  }, [step, journeyData, mood, duration, activity, routeVariant, walkingSpeed, runningSpeed]);
 
   const reset = () => {
     setStep("landing");
@@ -2475,6 +2519,18 @@ function PostScreen({
     if (savedJourneyId) {
       updateJourneyFeeling(savedJourneyId, surveyPayload);
     }
+
+    // Track sequential survey outcome metrics in Mixpanel
+    mixpanel.track("walk_survey_submitted", {
+      mood: mood,
+      journey_id: savedJourneyId,
+      mood_delta: moodDelta, // number -2 to +2
+      perceived_feeling: mappedFeel, // "Better" | "Same" | "Worse"
+      felt_safe: safety === "Yes",
+      cognitive_restoration: clarity, // number 1 to 5
+      environmental_stimulation: stimulation, // "Too Busy" | "Too Quiet" | "Perfect"
+      willingness_to_repeat: repeat === "Yes",
+    });
     
     setSubmitted(true);
   };

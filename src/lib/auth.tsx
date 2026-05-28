@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { User } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
 import { supabase, supabaseConfigured } from "./supabase";
+import { mixpanel } from "./mixpanel";
 
 let lastProcessedCode: string | null = null;
 
@@ -34,6 +35,34 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(supabaseConfigured);
+
+  // Sync user authentication state with Mixpanel identities
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+
+    if (user) {
+      // 1. Identify user canonically via database unique ID (stable UUID)
+      mixpanel.identify(user.id);
+
+      // 2. Set key user properties for demographic analysis
+      mixpanel.people.set({
+        $email: user.email ?? "",
+        $name: user.user_metadata?.full_name ?? "",
+        $avatar: user.user_metadata?.avatar_url ?? "",
+        $created: user.created_at,
+        platform: checkIsNative() ? Capacitor.getPlatform() : "web",
+      });
+
+      // 3. Register persistent super properties auto-attached to all events
+      mixpanel.register({
+        platform: checkIsNative() ? Capacitor.getPlatform() : "web",
+        environment: import.meta.env.PROD ? "production" : "development",
+      });
+    } else {
+      // Clear Mixpanel identity on logout to start a fresh anonymous session
+      mixpanel.reset();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -162,6 +191,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const upsertProfile = async () => {
       try {
+        // Query to check if profile exists before upsert to detect net new signup
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", user.id)
+          .maybeSingle();
+
         const { error } = await supabase
           .from("profiles")
           .upsert(
@@ -172,8 +208,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
             { onConflict: "id" },
           );
+        
         if (error) {
           console.error("Profile upsert error:", error.message);
+        } else if (!existingProfile) {
+          // Fire sign_up_completed event AFTER identify() has been called in the sibling useEffect
+          mixpanel.track("sign_up_completed", {
+            sign_up_method: "google",
+            platform: checkIsNative() ? Capacitor.getPlatform() : "web",
+          });
         }
       } catch (err) {
         console.error("Profile upsert exception:", err);

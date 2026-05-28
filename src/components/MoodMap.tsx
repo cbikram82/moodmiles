@@ -93,6 +93,8 @@ function parseOSRMStep(step: any): string | null {
   return distance > 0 ? `${action} and walk for ${distance} meters` : action;
 }
 
+const overpassRouteCache = new Map<string, any>();
+
 // Haversine formula to compute distance in km between two GPS coordinates
 function haversineDistance(p1: LatLng, p2: LatLng): number {
   const R = 6371; // Earth radius in km
@@ -149,6 +151,7 @@ export function MoodMap({
 
   const lastSpokenMilestoneDistanceRef = useRef<number>(0);
   const lastWaypointHapticIndexRef = useRef<number>(-1);
+  const breadcrumbsRef = useRef<LatLng[]>([]);
 
   // Helper to calculate km/h based on user-configured speeds
   const getSpeedKmh = (): number => {
@@ -210,6 +213,7 @@ export function MoodMap({
     }
 
     if (liveTracking) {
+      breadcrumbsRef.current = []; // Reset stable reference on tracking start
       // 2A. Active watch tracking - updates liveLocation, NEVER overrides routeCenter!
       watchId = navigator.geolocation.watchPosition(
         (position) => {
@@ -221,36 +225,37 @@ export function MoodMap({
           setLiveLocation(newPos);
           setLoading(false);
 
-          // Update breadcrumbs and haversine calculations
-          setBreadcrumbs((prev) => {
-            const next = [...prev];
-            if (next.length === 0) {
+          // Update breadcrumbs and haversine calculations using stable ref to avoid nested state updates in render cycles
+          const prevBreadcrumbs = breadcrumbsRef.current;
+          const next = [...prevBreadcrumbs];
+          if (next.length === 0) {
+            next.push(newPos);
+            breadcrumbsRef.current = next;
+            setBreadcrumbs(next);
+          } else {
+            const last = next[next.length - 1];
+            const dist = haversineDistance(last, newPos);
+            if (dist > 0.003) {
               next.push(newPos);
-            } else {
-              const last = next[next.length - 1];
-              const dist = haversineDistance(last, newPos);
-              if (dist > 0.003) {
-                next.push(newPos);
-                setCumulativeDistance((prevDist) => {
-                  const updated = prevDist + dist;
-                  onDistanceChange?.(updated);
-                  
-                  // Milestone announcements every 0.5 km
-                  if (updated - lastSpokenMilestoneDistanceRef.current >= 0.5) {
-                    const nextMilestone = Math.floor(updated * 2) / 2;
-                    if (nextMilestone > lastSpokenMilestoneDistanceRef.current) {
-                      lastSpokenMilestoneDistanceRef.current = nextMilestone;
-                      speakMindfulnessCue(`You have completed ${nextMilestone.toFixed(1)} kilometers.`);
-                    }
+              breadcrumbsRef.current = next;
+              setBreadcrumbs(next);
+              
+              setCumulativeDistance((prevDist) => {
+                const updated = prevDist + dist;
+                
+                // Milestone announcements every 0.5 km
+                if (updated - lastSpokenMilestoneDistanceRef.current >= 0.5) {
+                  const nextMilestone = Math.floor(updated * 2) / 2;
+                  if (nextMilestone > lastSpokenMilestoneDistanceRef.current) {
+                    lastSpokenMilestoneDistanceRef.current = nextMilestone;
+                    speakMindfulnessCue(`You have completed ${nextMilestone.toFixed(1)} kilometers.`);
                   }
-                  
-                  return updated;
-                });
-              }
+                }
+                
+                return updated;
+              });
             }
-            onBreadcrumbsChange?.(next);
-            return next;
-          });
+          }
         },
         (err) => {
           console.warn("Geolocation watch error: ", err.message);
@@ -289,6 +294,15 @@ export function MoodMap({
       }
     };
   }, [liveTracking, onDistanceChange, usingCustomLocation, routeCenter]);
+
+  // Sync live tracking state (distance & breadcrumbs) cleanly outside the render updates cycle
+  useEffect(() => {
+    onDistanceChange?.(cumulativeDistance);
+  }, [cumulativeDistance, onDistanceChange]);
+
+  useEffect(() => {
+    onBreadcrumbsChange?.(breadcrumbs);
+  }, [breadcrumbs, onBreadcrumbsChange]);
 
   // 3. Algorithmic spatial loop generator with 2D Rotation and Geometry Mutation
   const rotateOffset = (latOff: number, lngOff: number, degrees: number) => {
@@ -379,6 +393,12 @@ export function MoodMap({
     if (!routeCenter) return;
     
     const loadOverpassData = async () => {
+      const cacheKey = `${routeCenter.lat.toFixed(3)},${routeCenter.lng.toFixed(3)}`;
+      if (overpassRouteCache.has(cacheKey)) {
+        setOverpassData(overpassRouteCache.get(cacheKey));
+        return;
+      }
+
       try {
         // Query a 1km bounding box for cafes, restaurants, lit streets, transit stops
         const box = `${routeCenter.lat - 0.009},${routeCenter.lng - 0.009},${routeCenter.lat + 0.009},${routeCenter.lng + 0.009}`;
@@ -416,7 +436,9 @@ export function MoodMap({
           });
         }
         
-        setOverpassData({ pois, litNodes, parks });
+        const result = { pois, litNodes, parks };
+        overpassRouteCache.set(cacheKey, result);
+        setOverpassData(result);
       } catch (err) {
         console.warn("Local Overpass fetch failed, continuing with empty context:", err);
         setOverpassData({ pois: [], litNodes: [], parks: [] });
@@ -426,16 +448,17 @@ export function MoodMap({
     loadOverpassData();
   }, [routeCenter]);
 
-  // Computational Psychogeography ranking & OSRM evaluator
+  // Computational Psychogeography ranking & OSRM evaluator (debounced to avoid rate limiting 429 errors)
   useEffect(() => {
     if (!routeCenter) return;
     
     const controller = new AbortController();
     const signal = controller.signal;
     
-    const calculateAffectiveRoute = async () => {
-      setRouteLoading(true);
-      const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
+    const debounceTimer = setTimeout(() => {
+      const calculateAffectiveRoute = async () => {
+        setRouteLoading(true);
+        const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
       
       const pois = overpassData?.pois || [];
       const litNodes = overpassData?.litNodes || [];
@@ -460,31 +483,48 @@ export function MoodMap({
         { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 0.85, closestPark), label: "Compact" }
       ];
       
-      // Fetch OSRM coordinates for all 3 candidates in parallel using the abort signal
-      const routePromises = candidates.map(async (cand) => {
+      // Fetch OSRM coordinates for candidates sequentially with a small delay to avoid hitting the 429 rate limit
+      const results: { waypoints: LatLng[]; routeData: any }[] = [];
+      for (let i = 0; i < candidates.length; i++) {
+        if (signal.aborted) return;
+        const cand = candidates[i];
         const fullCoordinates = [routeCenter, ...cand.waypoints, routeCenter];
         const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
         const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
         
         try {
           const res = await fetch(osrmUrl, { signal });
-          if (!res.ok) return null;
-          const data = await res.json();
-          if (data.code !== "Ok" || !data.routes || !data.routes[0]) return null;
-          return { waypoints: cand.waypoints, routeData: data.routes[0] };
-        } catch {
-          return null;
+          if (signal.aborted) return;
+          if (res.ok) {
+            const data = await res.json();
+            if (signal.aborted) return;
+            if (data.code === "Ok" && data.routes && data.routes[0]) {
+              results.push({ waypoints: cand.waypoints, routeData: data.routes[0] });
+            }
+          }
+        } catch (err) {
+          if (signal.aborted) return;
+          // Ignore fetch errors/abort signals and allow other candidates to load or fall back
         }
-      });
+        
+        // Add 150ms delay between candidate requests to prevent 429 Too Many Requests rate-limiting
+        if (i < candidates.length - 1) {
+          if (signal.aborted) return;
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+      }
       
-      const results = await Promise.all(routePromises);
-      const validResults = results.filter((r) => r !== null) as { waypoints: LatLng[]; routeData: any }[];
+      if (signal.aborted) return;
+      const validResults = results;
       
       if (validResults.length === 0) {
+        if (signal.aborted) return;
         const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark);
         setActiveWaypoints(fallbackWaypoints);
         setActiveRouteGeometry([routeCenter, ...fallbackWaypoints, routeCenter]);
-        setActiveRouteSteps(["Start walking forward", "Continue along the trail to complete the loop"]);
+        const fallbackSteps = ["Start walking forward", "Continue along the trail to complete the loop"];
+        setActiveRouteSteps(fallbackSteps);
+        onNavigationStepsChange?.(fallbackSteps);
         setRoutingDistance(getSpeedKmh() * (duration / 60));
         setRouteLoading(false);
         return;
@@ -602,6 +642,7 @@ export function MoodMap({
         return { waypoints: res.waypoints, routeData: res.routeData, coords, score: finalScore };
       });
       
+      if (signal.aborted) return;
       scoredRoutes.sort((a, b) => b.score - a.score);
       const winner = scoredRoutes[0];
       
@@ -627,11 +668,13 @@ export function MoodMap({
       
       setRoutingDistance(winner.routeData.distance / 1000);
       setRouteLoading(false);
-    };
-    
-    calculateAffectiveRoute();
+      };
+      
+      calculateAffectiveRoute();
+    }, 350); // 350ms debounce to buffer frequent slider/mood shifts
     
     return () => {
+      clearTimeout(debounceTimer);
       controller.abort(); // Cancel pending network fetches on change
     };
   }, [routeCenter, overpassData, duration, activity, walkingSpeed, runningSpeed, routeVariant, mood]);
