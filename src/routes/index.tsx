@@ -1330,10 +1330,24 @@ function Landing({
     return `${mins}:${s.toString().padStart(2, "0")}`;
   };
 
+  const parsePostFeeling = (feeling: string | null): "Better" | "Same" | "Worse" | null => {
+    if (!feeling) return null;
+    if (feeling.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(feeling);
+        return parsed.feel || null;
+      } catch {
+        return feeling as any;
+      }
+    }
+    return feeling as any;
+  };
+
   const feelingColor = (f: string | null) => {
-    if (f === "Better") return "text-emerald-400";
-    if (f === "Same") return "text-amber-400";
-    if (f === "Worse") return "text-red-400";
+    const cleanF = parsePostFeeling(f);
+    if (cleanF === "Better") return "text-emerald-400";
+    if (cleanF === "Same") return "text-amber-400";
+    if (cleanF === "Worse") return "text-red-400";
     return "text-muted-foreground";
   };
 
@@ -1347,9 +1361,10 @@ function Landing({
         stats[j.mood] = { better: 0, same: 0, worse: 0, total: 0 };
       }
       stats[j.mood].total += 1;
-      if (j.post_feeling === "Better") stats[j.mood].better += 1;
-      else if (j.post_feeling === "Same") stats[j.mood].same += 1;
-      else if (j.post_feeling === "Worse") stats[j.mood].worse += 1;
+      const parsedFeel = parsePostFeeling(j.post_feeling);
+      if (parsedFeel === "Better") stats[j.mood].better += 1;
+      else if (parsedFeel === "Same") stats[j.mood].same += 1;
+      else if (parsedFeel === "Worse") stats[j.mood].worse += 1;
     });
     return stats;
   }, [journeys]);
@@ -1374,7 +1389,8 @@ function Landing({
         };
       }
       combos[key].total += 1;
-      if (j.post_feeling === "Better") combos[key].better += 1;
+      const parsedFeel = parsePostFeeling(j.post_feeling);
+      if (parsedFeel === "Better") combos[key].better += 1;
     });
 
     const sorted = Object.values(combos).sort((a, b) => {
@@ -1436,9 +1452,10 @@ function Landing({
 
       const moodScores = dayWalks
         .map((j) => {
-          if (j.post_feeling === "Better") return 100;
-          if (j.post_feeling === "Same") return 50;
-          if (j.post_feeling === "Worse") return 0;
+          const parsedFeel = parsePostFeeling(j.post_feeling);
+          if (parsedFeel === "Better") return 100;
+          if (parsedFeel === "Same") return 50;
+          if (parsedFeel === "Worse") return 0;
           return null;
         })
         .filter((score) => score !== null) as number[];
@@ -1607,7 +1624,7 @@ function Landing({
                             <span
                               className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${feelingColor(j.post_feeling)}`}
                             >
-                              {j.post_feeling}
+                              {parsePostFeeling(j.post_feeling)}
                             </span>
                           )}
                         </div>
@@ -2429,64 +2446,252 @@ function PostScreen({
   onDone: () => void;
   savedJourneyId: string | null;
 }) {
-  const handleSelect = (f: "Better" | "Same" | "Worse") => {
-    onSelect(f);
+  const [surveyStep, setSurveyStep] = useState(1);
+  
+  const [moodDelta, setMoodDelta] = useState<number | null>(null);
+  const [safety, setSafety] = useState<"Yes" | "No" | null>(null);
+  const [clarity, setClarity] = useState<number | null>(null);
+  const [stimulation, setStimulation] = useState<"Too Busy" | "Too Quiet" | "Perfect" | null>(null);
+  const [repeat, setRepeat] = useState<"Yes" | "No" | null>(null);
+  
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = () => {
+    if (moodDelta === null || !safety || !clarity || !stimulation || !repeat) return;
+    
+    const mappedFeel = moodDelta > 0 ? "Better" : moodDelta === 0 ? "Same" : "Worse";
+    
+    // Save stringified JSON in the database feeling column
+    const surveyPayload = JSON.stringify({
+      feel: mappedFeel,
+      moodDelta,
+      safety,
+      clarity,
+      stimulation,
+      willingnessToRepeat: repeat
+    });
+    
+    onSelect(mappedFeel);
     if (savedJourneyId) {
-      updateJourneyFeeling(savedJourneyId, f);
+      updateJourneyFeeling(savedJourneyId, surveyPayload);
     }
+    
+    setSubmitted(true);
   };
+
   const reflection = useMemo(() => {
-    if (!feel) return null;
-    if (feel === "Better")
-      return `Something shifted. You went out looking for ${mood.toLowerCase()}, and your body answered. Notice what specifically helped — the pace, the streets, the soundtrack — so you can find it again next time.`;
-    if (feel === "Same")
+    if (moodDelta === null) return null;
+    if (moodDelta > 0)
+      return `Something shifted. You went out looking for ${mood.toLowerCase()}, and your body answered. Notice what specifically helped — the pace, the streets, the scenery — so you can find it again next time.`;
+    if (moodDelta === 0)
       return `Same isn't nothing. You still chose to move when you didn't have to, and that's its own kind of ${mood.toLowerCase()}. Some routes do their work quietly, hours later.`;
     return `That's honest, and worth knowing. ${mood} isn't always one walk away. Maybe today asked for rest, or a different route, or simply more time. Tomorrow can try again.`;
-  }, [feel, mood]);
+  }, [moodDelta, mood]);
 
+  // Render sequential sub-screens
   return (
-    <section className="space-y-6 pt-4">
+    <section className="space-y-6 pt-4 max-w-md mx-auto">
       <div className="space-y-2 text-center">
-        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">You're back</p>
-        <h2 className="text-3xl font-semibold tracking-tight">How do you feel now?</h2>
-        <p className="text-sm text-muted-foreground">No wrong answer. Just check in.</p>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">Post-Flight Survey</p>
+        <h2 className="text-2xl font-bold tracking-tight">Empirical Outcome Check</h2>
+        <p className="text-xs text-muted-foreground">Calibrate our psychogeographical environmental algorithms.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {(["Better", "Same", "Worse"] as const).map((opt) => {
-          const active = feel === opt;
-          return (
-            <button
-              key={opt}
-              onClick={() => handleSelect(opt)}
-              className={`rounded-2xl border px-3 py-5 text-sm font-medium transition ${
-                active
-                  ? "border-primary/60 bg-gradient-to-br from-accent/25 to-primary/25"
-                  : "border-border/60 bg-card/40 backdrop-blur hover:border-border"
-              }`}
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-
-      {reflection && (
-        <div className="rounded-2xl border border-border/60 bg-card/50 p-5 backdrop-blur">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" />A short reflection
+      {!submitted ? (
+        <div className="rounded-3xl border border-border/60 bg-card/40 p-6 backdrop-blur-xl space-y-6 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+            <span>Question {surveyStep} of 5</span>
+            <span className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
+              <span 
+                className="block h-full bg-primary transition-all duration-300"
+                style={{ width: `${(surveyStep / 5) * 100}%` }}
+              />
+            </span>
           </div>
-          <p className="mt-2 text-[15px] leading-relaxed text-foreground/90">{reflection}</p>
+
+          {surveyStep === 1 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-center uppercase tracking-wider text-muted-foreground/90">How did this loop affect your mood?</h3>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[
+                  { value: -2, label: "Worse" },
+                  { value: -1, label: "Lower" },
+                  { value: 0, label: "Same" },
+                  { value: 1, label: "Better" },
+                  { value: 2, label: "Wow" }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      setMoodDelta(item.value);
+                      setSurveyStep(2);
+                    }}
+                    className={`flex flex-col items-center justify-center py-4 rounded-xl border text-xs font-semibold transition cursor-pointer hover:border-primary/60 hover:bg-primary/5 ${
+                      moodDelta === item.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-foreground"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">{item.value > 0 ? `+${item.value}` : item.value}</span>
+                    <span className="text-[8px] mt-1 text-center scale-90 opacity-70 leading-none">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {surveyStep === 2 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-center uppercase tracking-wider text-muted-foreground/90">Did you feel safe walking this trail?</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { value: "Yes", label: "Completely Safe" },
+                  { value: "No", label: "Felt Isolated / Dark" }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      setSafety(item.value as any);
+                      setSurveyStep(3);
+                    }}
+                    className={`py-5 rounded-2xl border text-sm font-semibold transition cursor-pointer hover:border-primary/60 hover:bg-primary/5 ${
+                      safety === item.value
+                        ? item.value === "Yes"
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-destructive bg-destructive/10 text-destructive"
+                        : "border-border/60 text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setSurveyStep(1)} className="text-xs text-muted-foreground hover:underline block mx-auto pt-2">
+                ← Back
+              </button>
+            </div>
+          )}
+
+          {surveyStep === 3 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-center uppercase tracking-wider text-muted-foreground/90">Rate your cognitive restoration:</h3>
+              <div className="grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5].map((val) => (
+                  <button
+                    key={val}
+                    onClick={() => {
+                      setClarity(val);
+                      setSurveyStep(4);
+                    }}
+                    className={`py-4 rounded-xl border text-sm font-bold transition cursor-pointer hover:border-primary/60 hover:bg-primary/5 ${
+                      clarity === val
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-foreground"
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground px-1 uppercase tracking-wider font-semibold">
+                <span>Still Cluttered</span>
+                <span>Fully Restored</span>
+              </div>
+              <button onClick={() => setSurveyStep(2)} className="text-xs text-muted-foreground hover:underline block mx-auto pt-2">
+                ← Back
+              </button>
+            </div>
+          )}
+
+          {surveyStep === 4 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-center uppercase tracking-wider text-muted-foreground/90">How was the environmental stimulation?</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: "Too Quiet", label: "Too Isolated" },
+                  { value: "Perfect", label: "Harmonious" },
+                  { value: "Too Busy", label: "Too Crowded" }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      setStimulation(item.value as any);
+                      setSurveyStep(5);
+                    }}
+                    className={`py-4 px-1 rounded-xl border text-[11px] font-semibold transition cursor-pointer leading-tight hover:border-primary/60 hover:bg-primary/5 ${
+                      stimulation === item.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setSurveyStep(3)} className="text-xs text-muted-foreground hover:underline block mx-auto pt-2">
+                ← Back
+              </button>
+            </div>
+          )}
+
+          {surveyStep === 5 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-center uppercase tracking-wider text-muted-foreground/90">Would you repeat this route option?</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { value: "Yes", label: "Yes, repeat loop" },
+                  { value: "No", label: "No, rotate variant" }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      setRepeat(item.value as any);
+                    }}
+                    className={`py-5 rounded-2xl border text-sm font-semibold transition cursor-pointer hover:border-primary/60 hover:bg-primary/5 ${
+                      repeat === item.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="pt-4">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!repeat}
+                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-semibold hover:opacity-95 disabled:opacity-40"
+                >
+                  Submit & Finish
+                </Button>
+              </div>
+              <button onClick={() => setSurveyStep(4)} className="text-xs text-muted-foreground hover:underline block mx-auto pt-2">
+                ← Back
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {reflection && (
+            <div className="rounded-3xl border border-border/60 bg-card/50 p-6 backdrop-blur-xl space-y-4 animate-in fade-in zoom-in-95 duration-500">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground font-semibold">
+                <Sparkles className="h-4 w-4 text-accent animate-pulse" />
+                Affective Loop Reflection
+              </div>
+              <p className="text-sm leading-relaxed text-foreground/90">{reflection}</p>
+            </div>
+          )}
+
+          <Button
+            onClick={onDone}
+            className="h-14 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-semibold hover:opacity-95 shadow-md shadow-primary/10 cursor-pointer"
+          >
+            Done
+          </Button>
         </div>
       )}
-
-      <Button
-        onClick={onDone}
-        disabled={!feel}
-        className="h-14 w-full rounded-2xl bg-gradient-to-r from-accent to-primary text-background font-medium hover:opacity-95 disabled:opacity-40"
-      >
-        Done
-      </Button>
     </section>
   );
 }

@@ -302,69 +302,295 @@ export function MoodMap({
     };
   };
 
-  const getLoopWaypoints = (start: LatLng): LatLng[] => {
+  const [activeWaypoints, setActiveWaypoints] = useState<LatLng[]>([]);
+  const [activeRouteGeometry, setActiveRouteGeometry] = useState<LatLng[]>([]);
+  const [activeRouteSteps, setActiveRouteSteps] = useState<string[]>([]);
+  const [routeLoading, setRouteLoading] = useState<boolean>(false);
+  const [overpassData, setOverpassData] = useState<{
+    pois: { lat: number; lng: number }[];
+    litNodes: { lat: number; lng: number }[];
+    parks: { lat: number; lng: number; name: string }[];
+  } | null>(null);
+
+  const getCandidateWaypoints = (start: LatLng, variantIndex: number, radiusScale: number, closestPark: LatLng | null): LatLng[] => {
     const speedKmh = getSpeedKmh();
     const totalDistanceKm = speedKmh * (duration / 60);
-    const sideKm = totalDistanceKm / 4;
-
-    // Scale down loop offsets for "Nature Connection" loops to keep them compact (e.g. ~150-250m radius) so they stay within the park trails
+    let R = (totalDistanceKm / 2.8) * radiusScale;
+    
     const isNatureLoop = mood === "Nature Connection";
-    const scale = isNatureLoop ? 0.28 : 1.0;
-
-    const latOffset = (sideKm / 111) * scale;
-    const radLat = (start.lat * Math.PI) / 180;
-    const lngOffset = (sideKm / (111 * Math.cos(radLat))) * scale;
-
-    const rawOffsets: { lat: number; lng: number }[] = [];
-
-    if (routeVariant === 1) {
-      // Labyrinth / Winding organic loop relative to starting point
-      rawOffsets.push({ lat: latOffset * 0.8, lng: -lngOffset * 0.3 });
-      rawOffsets.push({ lat: latOffset * 1.5, lng: lngOffset * 0.2 });
-      rawOffsets.push({ lat: latOffset * 1.0, lng: lngOffset * 1.1 });
-      rawOffsets.push({ lat: latOffset * 0.3, lng: lngOffset * 0.4 });
-    } else if (routeVariant === 2) {
-      // Infinity / Figure-Eight loop lobes relative to starting point
-      rawOffsets.push({ lat: latOffset * 0.9, lng: lngOffset * 0.8 });
-      rawOffsets.push({ lat: latOffset * 0.2, lng: lngOffset * 0.2 });
-      rawOffsets.push({ lat: -latOffset * 0.5, lng: lngOffset * 0.9 });
-      rawOffsets.push({ lat: latOffset * 0.5, lng: -lngOffset * 0.3 });
-    } else {
-      // Default (original shapes)
-      if (mood === "Clear Mind") {
-        rawOffsets.push({ lat: latOffset * 1.8, lng: lngOffset * 0.4 });
-      } else if (mood === "Creative Spark" || mood === "Escape") {
-        const factor = mood === "Escape" ? 1.3 : 1.1;
-        rawOffsets.push({ lat: latOffset * factor, lng: -lngOffset * 0.3 });
-        rawOffsets.push({ lat: latOffset * 1.6, lng: lngOffset * 1.1 });
-        rawOffsets.push({ lat: -latOffset * 0.2, lng: lngOffset * factor });
-      } else if (mood === "Energy Boost" || mood === "Confidence") {
-        rawOffsets.push({ lat: latOffset, lng: -lngOffset * 0.2 });
-        rawOffsets.push({ lat: latOffset, lng: lngOffset });
-        rawOffsets.push({ lat: 0, lng: lngOffset });
-      } else if (mood === "Nature Connection") {
-        rawOffsets.push({ lat: latOffset * 1.4, lng: -lngOffset * 0.5 });
-        rawOffsets.push({ lat: latOffset * 1.8, lng: lngOffset * 0.6 });
-        rawOffsets.push({ lat: latOffset * 0.2, lng: lngOffset * 1.2 });
-      } else {
-        rawOffsets.push({ lat: latOffset, lng: 0 });
-        rawOffsets.push({ lat: latOffset, lng: lngOffset });
-        rawOffsets.push({ lat: 0, lng: lngOffset });
-      }
+    if (isNatureLoop) {
+      R = Math.min(R, 0.35); // Keep it compact so it fits within the park boundary
     }
-
-    // Apply 2D rotation of path coords based on route_variant (0 = 0 deg, 1 = 90 deg, 2 = 180 deg)
-    const angleDegrees = routeVariant * 90;
-    const waypoints = rawOffsets.map((offset) => {
-      const rotated = rotateOffset(offset.lat, offset.lng, angleDegrees);
-      return {
-        lat: start.lat + rotated.lat,
-        lng: start.lng + rotated.lng,
+    
+    // Annulus headings (0, 120, 240 degrees) rotated by variantIndex * 90 degrees
+    const headings = [0, 120, 240].map(h => h + (variantIndex * 90));
+    
+    return headings.map((theta) => {
+      const latOffset = (R * Math.cos(theta * Math.PI / 180)) / 111;
+      const radLat = (start.lat * Math.PI) / 180;
+      const lngOffset = (R * Math.sin(theta * Math.PI / 180)) / (111 * Math.cos(radLat));
+      
+      let wp = {
+        lat: start.lat + latOffset,
+        lng: start.lng + lngOffset,
       };
+      
+      if (isNatureLoop && closestPark) {
+        // Blended shift: pull waypoint anchor coordinates into the park boundary!
+        wp = {
+          lat: wp.lat * 0.25 + closestPark.lat * 0.75,
+          lng: wp.lng * 0.25 + closestPark.lng * 0.75,
+        };
+      }
+      
+      return wp;
     });
-
-    return waypoints;
   };
+
+  // Unified Overpass static POIs & Safety static metadata fetcher
+  useEffect(() => {
+    if (!routeCenter) return;
+    
+    const loadOverpassData = async () => {
+      try {
+        // Query a 1km bounding box for cafes, restaurants, lit streets, transit stops
+        const box = `${routeCenter.lat - 0.009},${routeCenter.lng - 0.009},${routeCenter.lat + 0.009},${routeCenter.lng + 0.009}`;
+        const query = `[out:json][timeout:5];(` +
+          `node(${box})[amenity~"cafe|restaurant|pub|shop|marketplace"];` +
+          `node(${box})[highway=bus_stop];` +
+          `node(${box})[lit=yes];` +
+          `nwr(around:8000,${routeCenter.lat},${routeCenter.lng})[leisure=park];` +
+          `nwr(around:8000,${routeCenter.lat},${routeCenter.lng})[leisure=nature_reserve];` +
+          `);out center;`;
+          
+        const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error("Overpass API status: " + res.status);
+        const data = await res.json();
+        
+        const pois: LatLng[] = [];
+        const litNodes: LatLng[] = [];
+        const parks: { lat: number; lng: number; name: string }[] = [];
+        
+        if (data && data.elements) {
+          data.elements.forEach((el: any) => {
+            const lat = el.lat || (el.center && el.center.lat);
+            const lng = el.lon || (el.center && el.center.lon);
+            if (!lat || !lng) return;
+            
+            if (el.tags?.amenity || el.tags?.highway === "bus_stop") {
+              pois.push({ lat, lng });
+            }
+            if (el.tags?.lit === "yes") {
+              litNodes.push({ lat, lng });
+            }
+            if (el.tags?.leisure === "park" || el.tags?.leisure === "nature_reserve") {
+              parks.push({ lat, lng, name: el.tags.name || "Park" });
+            }
+          });
+        }
+        
+        setOverpassData({ pois, litNodes, parks });
+      } catch (err) {
+        console.warn("Local Overpass fetch failed, continuing with empty context:", err);
+        setOverpassData({ pois: [], litNodes: [], parks: [] });
+      }
+    };
+    
+    loadOverpassData();
+  }, [routeCenter]);
+
+  // Computational Psychogeography ranking & OSRM evaluator
+  useEffect(() => {
+    if (!routeCenter || !overpassData) return;
+    
+    const calculateAffectiveRoute = async () => {
+      setRouteLoading(true);
+      const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
+      
+      let closestPark: LatLng | null = null;
+      if (overpassData.parks.length > 0) {
+        let minDist = Infinity;
+        overpassData.parks.forEach((p) => {
+          const dist = haversineDistance(routeCenter, p);
+          if (dist < minDist) {
+            minDist = dist;
+            closestPark = p;
+          }
+        });
+      }
+      
+      // Candidate options (stochastic variations)
+      const candidates = [
+        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark), label: "Standard" },
+        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 1.15, closestPark), label: "Expanded" },
+        { waypoints: getCandidateWaypoints(routeCenter, routeVariant, 0.85, closestPark), label: "Compact" }
+      ];
+      
+      const routePromises = candidates.map(async (cand) => {
+        const fullCoordinates = [routeCenter, ...cand.waypoints, routeCenter];
+        const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
+        const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
+        
+        try {
+          const res = await fetch(osrmUrl);
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (data.code !== "Ok" || !data.routes || !data.routes[0]) return null;
+          return { waypoints: cand.waypoints, routeData: data.routes[0] };
+        } catch {
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(routePromises);
+      const validResults = results.filter((r) => r !== null) as { waypoints: LatLng[]; routeData: any }[];
+      
+      if (validResults.length === 0) {
+        const fallbackWaypoints = getCandidateWaypoints(routeCenter, routeVariant, 1.0, closestPark);
+        setActiveWaypoints(fallbackWaypoints);
+        setActiveRouteGeometry([routeCenter, ...fallbackWaypoints, routeCenter]);
+        setActiveRouteSteps(["Start walking forward", "Continue along the trail to complete the loop"]);
+        setRoutingDistance(getSpeedKmh() * (duration / 60));
+        setRouteLoading(false);
+        return;
+      }
+      
+      const scoredRoutes = validResults.map((res) => {
+        const route = res.routeData;
+        const coords = route.geometry.coordinates.map((c: any) => ({ lat: c[1], lng: c[0] })) as LatLng[];
+        const totalDist = route.distance / 1000;
+        
+        const directDist = haversineDistance(routeCenter, res.waypoints[0]) +
+                           haversineDistance(res.waypoints[0], res.waypoints[1]) +
+                           haversineDistance(res.waypoints[1], res.waypoints[2]) +
+                           haversineDistance(res.waypoints[2], routeCenter);
+        const sinuosity = totalDist / (directDist || 1);
+        
+        const headings: number[] = [];
+        for (let i = 0; i < coords.length - 1; i++) {
+          const dx = coords[i+1].lng - coords[i].lng;
+          const dy = coords[i+1].lat - coords[i].lat;
+          let heading = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (heading < 0) heading += 360;
+          headings.push(heading);
+        }
+        
+        const bins = new Array(8).fill(0);
+        headings.forEach((h) => {
+          const binIdx = Math.floor(h / 45) % 8;
+          bins[binIdx]++;
+        });
+        
+        let entropy = 0;
+        const totalSegments = headings.length || 1;
+        bins.forEach((count) => {
+          const p = count / totalSegments;
+          if (p > 0) entropy -= p * Math.log2(p);
+        });
+        
+        let totalGreenScore = 0;
+        coords.forEach((coord) => {
+          let minDist = Infinity;
+          if (overpassData.parks.length > 0) {
+            overpassData.parks.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < minDist) minDist = d;
+            });
+          }
+          totalGreenScore += Math.exp(-minDist / 0.2);
+        });
+        const greenery = totalGreenScore / (coords.length || 1);
+        
+        let totalVitality = 0;
+        coords.forEach((coord) => {
+          let minDist = Infinity;
+          if (overpassData.pois.length > 0) {
+            overpassData.pois.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < minDist) minDist = d;
+            });
+          }
+          totalVitality += Math.exp(-minDist / 0.15);
+        });
+        const vitality = totalVitality / (coords.length || 1);
+        
+        let safetyPenalty = 0;
+        if (isNight) {
+          let darkCount = 0;
+          coords.forEach((coord) => {
+            let litDist = Infinity;
+            overpassData.litNodes.forEach((l) => {
+              const d = haversineDistance(coord, l);
+              if (d < litDist) litDist = d;
+            });
+            let poiDist = Infinity;
+            overpassData.pois.forEach((p) => {
+              const d = haversineDistance(coord, p);
+              if (d < poiDist) poiDist = d;
+            });
+            
+            if (litDist > 0.05 && poiDist > 0.08) {
+              darkCount++;
+            }
+          });
+          const darkRatio = darkCount / (coords.length || 1);
+          safetyPenalty = Math.pow(darkRatio, 2.5) * 4.0;
+        }
+        
+        let repetition = 0;
+        for (let i = 0; i < coords.length; i++) {
+          for (let j = i + 10; j < coords.length; j++) {
+            if (haversineDistance(coords[i], coords[j]) < 0.01) repetition += 0.5;
+          }
+        }
+        
+        let finalScore = 0;
+        if (mood === "Calm") {
+          finalScore = greenery * 3.5 - vitality * 1.5 - sinuosity * 0.5 - safetyPenalty - repetition;
+        } else if (mood === "Clear Mind") {
+          finalScore = -entropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetition;
+        } else if (mood === "Energy Boost" || mood === "Confidence") {
+          finalScore = vitality * 2.5 + sinuosity * 1.0 + greenery * 0.5 - safetyPenalty - repetition;
+        } else if (mood === "Reflective" || mood === "Creative Spark" || mood === "Escape") {
+          finalScore = sinuosity * 3.5 + entropy * 2.0 - vitality * 0.5 - safetyPenalty - repetition;
+        } else if (mood === "Nature Connection") {
+          finalScore = greenery * 4.5 + sinuosity * 0.5 - safetyPenalty - repetition;
+        } else {
+          finalScore = greenery * 1.5 + sinuosity * 0.5 - safetyPenalty - repetition;
+        }
+        
+        return { waypoints: res.waypoints, routeData: res.routeData, coords, score: finalScore };
+      });
+      
+      scoredRoutes.sort((a, b) => b.score - a.score);
+      const winner = scoredRoutes[0];
+      
+      setActiveWaypoints(winner.waypoints);
+      setActiveRouteGeometry(winner.coords);
+      
+      if (winner.routeData.legs && winner.routeData.legs[0] && onNavigationStepsChange) {
+        const parsedSteps: string[] = [];
+        winner.routeData.legs.forEach((leg: any) => {
+          if (leg.steps) {
+            leg.steps.forEach((step: any) => {
+              const parsed = parseOSRMStep(step);
+              if (parsed && !parsedSteps.includes(parsed)) {
+                parsedSteps.push(parsed);
+              }
+            });
+          }
+        });
+        parsedSteps.push(`Calculated Route Entropy: ${winner.score.toFixed(2)} H(R)`);
+        setActiveRouteSteps(parsedSteps);
+        onNavigationStepsChange(parsedSteps);
+      }
+      
+      setRoutingDistance(winner.routeData.distance / 1000);
+      setRouteLoading(false);
+    };
+    
+    calculateAffectiveRoute();
+  }, [routeCenter, overpassData, duration, activity, walkingSpeed, runningSpeed, routeVariant, mood]);
 
   // Reset custom location back to browser GPS
   const handleResetToGPS = () => {
@@ -510,29 +736,6 @@ export function MoodMap({
       polylineRef.current = null;
     }
 
-    // Calculate coordinates loop around routeCenter
-    const waypoints = getLoopWaypoints(routeCenter);
-    const fullCoordinates = [routeCenter, ...waypoints, routeCenter];
-    const coordinatesString = fullCoordinates.map((coord) => `${coord.lng},${coord.lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/walking/${coordinatesString}?overview=full&geometries=geojson&steps=true${mood === "Nature Connection" ? "&continue_straight=false" : ""}`;
-
-    // Static Custom Start Pin
-    const startIcon = L.divIcon({
-      className: "custom-start-marker",
-      html: `
-        <div class="glowing-start-pin">
-          <div class="glowing-start-pin-ring"></div>
-          <div class="glowing-start-pin-core"></div>
-        </div>
-      `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    });
-    const startMarker = L.marker([routeCenter.lat, routeCenter.lng], { icon: startIcon }).addTo(
-      map,
-    );
-    markersRef.current.push(startMarker);
-
     // Waypoint Dots Custom Pin
     const wpIcon = L.divIcon({
       className: "custom-wp-marker",
@@ -541,84 +744,51 @@ export function MoodMap({
       iconAnchor: [4, 4],
     });
 
-    // Call OSRM
-    fetch(osrmUrl)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.code === "Ok" && data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          if (!liveTracking) {
-            setRoutingDistance(route.distance / 1000);
-            
-            // Extract and parse step-by-step turn directions if steps exist
-            if (route.legs && route.legs[0] && onNavigationStepsChange) {
-              const parsedSteps: string[] = [];
-              route.legs.forEach((leg: any) => {
-                if (leg.steps) {
-                  leg.steps.forEach((step: any) => {
-                    const parsed = parseOSRMStep(step);
-                    if (parsed && !parsedSteps.includes(parsed)) {
-                      parsedSteps.push(parsed);
-                    }
-                  });
-                }
-              });
-              onNavigationStepsChange(parsedSteps);
-            }
-          }
+    // Render the planned affective loop route
+    if (activeRouteGeometry.length > 0) {
+      const latLngs = activeRouteGeometry.map((coord) => [coord.lat, coord.lng]);
+      const polyline = L.polyline(latLngs, {
+        color: "#8b5cf6",
+        weight: 4.5,
+        opacity: 0.85,
+        lineJoin: "round",
+      }).addTo(map);
+      polylineRef.current = polyline;
 
-          const latLngs = route.geometry.coordinates.map((coord: number[]) => [
-            coord[1],
-            coord[0],
-          ]) as any[];
-
-          const polyline = L.polyline(latLngs, {
-            color: "#8b5cf6",
-            weight: 4.5,
-            opacity: 0.85,
-            lineJoin: "round",
-          }).addTo(map);
-          polylineRef.current = polyline;
-
-          waypoints.forEach((wp) => {
-            const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
-            markersRef.current.push(wpMarker);
-          });
-
-          // Focus planned bounds initially or pan to center if location updated
-          if (!liveTracking) {
-            map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
-          }
-        } else {
-          throw new Error("OSRM Failed status: " + data.code);
-        }
-      })
-      .catch(() => {
-        // Straight line fallback
-        const pathCoords = [...fullCoordinates].map((c) => [c.lat, c.lng]) as any[];
-        const polyline = L.polyline(pathCoords, {
-          color: "#a78bfa",
-          weight: 4,
-          opacity: 0.8,
-          dashArray: "6, 8",
-        }).addTo(map);
-        polylineRef.current = polyline;
-
-        waypoints.forEach((wp) => {
-          const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
-          markersRef.current.push(wpMarker);
-        });
-
-        if (!liveTracking) {
-          map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
-          setRoutingDistance(getSpeedKmh() * (duration / 60));
-        }
+      activeWaypoints.forEach((wp) => {
+        const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+        markersRef.current.push(wpMarker);
       });
+
+      if (!liveTracking) {
+        map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
+      }
+    } else {
+      // Straight line fallback if no geometry has been calculated yet
+      const fallbackWaypoints = activeWaypoints.length > 0 ? activeWaypoints : getCandidateWaypoints(routeCenter, routeVariant, 1.0, null);
+      const pathCoords = [routeCenter, ...fallbackWaypoints, routeCenter].map((c) => [c.lat, c.lng]);
+      const polyline = L.polyline(pathCoords, {
+        color: "#a78bfa",
+        weight: 4,
+        opacity: 0.8,
+        dashArray: "6, 8",
+      }).addTo(map);
+      polylineRef.current = polyline;
+
+      fallbackWaypoints.forEach((wp) => {
+        const wpMarker = L.marker([wp.lat, wp.lng], { icon: wpIcon }).addTo(map);
+        markersRef.current.push(wpMarker);
+      });
+
+      if (!liveTracking) {
+        map.fitBounds(polyline.getBounds(), { padding: [22, 22] });
+      }
+    }
 
     // B. LIVE ROUTE & GPS RENDERING (React state ticks)
     if (liveTracking && liveLocation) {
       // Check proximity to planned loop waypoints for haptic & spoken guidance
-      const waypoints = getLoopWaypoints(routeCenter);
+      const waypoints = activeWaypoints;
       for (let i = 0; i < waypoints.length; i++) {
         if (i <= lastWaypointHapticIndexRef.current) continue;
         const distToWp = haversineDistance(liveLocation, waypoints[i]);
@@ -677,7 +847,7 @@ export function MoodMap({
       // Pan to the user's active GPS coordinate to keep them centered
       map.panTo([liveLocation.lat, liveLocation.lng], { animate: true });
     }
-  }, [L, loading, routeCenter, mapTheme, breadcrumbs, liveTracking, liveLocation, routeVariant]);
+  }, [L, loading, routeCenter, mapTheme, breadcrumbs, liveTracking, liveLocation, routeVariant, activeRouteGeometry, activeWaypoints]);
 
   // Cleanup map container fully on unmount
   useEffect(() => {
@@ -960,11 +1130,11 @@ export function MoodMap({
     routeVariant,
   ]);
 
-  if (loading) {
+  if (loading || routeLoading) {
     return (
-      <div className="flex h-60 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl">
+      <div className="flex h-60 flex-col items-center justify-center rounded-3xl border border-border/60 bg-card/40 backdrop-blur-xl animate-pulse">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="mt-2 text-xs text-muted-foreground">Locating your coordinates...</span>
+        <span className="mt-2 text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">Optimizing affective trajectory...</span>
       </div>
     );
   }
