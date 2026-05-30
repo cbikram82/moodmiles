@@ -15,6 +15,7 @@ function AuthCallbackPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    const source = params.get("source");
 
     if (!code) {
       setStatus("error");
@@ -28,8 +29,8 @@ function AuthCallbackPage() {
       // not in Capacitor context
     }
 
-    if (isNative && supabaseConfigured) {
-      // We're inside the Capacitor webview — exchange the code here
+    if ((isNative || source === "web") && supabaseConfigured) {
+      // We're inside the web app or native Capacitor webview — exchange the code here
       // (the PKCE verifier is in this webview's localStorage)
       supabase.auth
         .exchangeCodeForSession(code)

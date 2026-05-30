@@ -145,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isNative = checkIsNative();
       const redirectTo = isNative
         ? "moodmiles://callback"
-        : `${window.location.origin}/auth/callback`;
+        : `${window.location.origin}/auth/callback?source=web`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
