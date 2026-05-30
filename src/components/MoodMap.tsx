@@ -766,26 +766,34 @@ export function MoodMap({
         const targetKm = getSpeedKmh() * (duration / 60);
         const durationError = Math.abs(totalDist - targetKm) / targetKm;
         
+        // Advanced penalty indicators
+        const repetitionPenalty = Math.min(repetition * 0.25, 2.0);
+        const excessSinuosity = Math.max(0, sinuosity - 1.15);
+        const durationPenalty = Math.min(durationError * 4.0, 2.5);
+
         let finalScore = 0;
         if (mood === "Calm") {
-          finalScore = greenery * 3.5 - vitality * 1.5 - sinuosity * 0.5 - safetyPenalty - repetition;
+          finalScore =
+            greenery * 4.0 -
+            vitality * 1.0 -
+            excessSinuosity * 0.8 -
+            safetyPenalty * 1.2 -
+            repetitionPenalty -
+            durationPenalty;
         } else if (mood === "Clear Mind") {
-          finalScore = -headingEntropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetition;
+          finalScore = -headingEntropy * 3.0 - sinuosity * 1.5 + greenery * 1.0 - safetyPenalty - repetitionPenalty - durationPenalty;
         } else if (mood === "Energy Boost" || mood === "Confidence") {
-          finalScore = vitality * 2.5 + sinuosity * 1.0 + greenery * 0.5 - safetyPenalty - repetition;
+          finalScore = vitality * 2.5 + sinuosity * 1.0 + greenery * 0.5 - safetyPenalty - repetitionPenalty - durationPenalty;
         } else if (mood === "Reflective" || mood === "Creative Spark" || mood === "Escape") {
-          finalScore = sinuosity * 3.5 + headingEntropy * 2.0 - vitality * 0.5 - safetyPenalty - repetition;
+          finalScore = sinuosity * 3.5 + headingEntropy * 2.0 - vitality * 0.5 - safetyPenalty - repetitionPenalty - durationPenalty;
         } else if (mood === "Nature Connection") {
-          finalScore = greenery * 4.5 + sinuosity * 0.5 - safetyPenalty - repetition;
+          finalScore = greenery * 4.5 + sinuosity * 0.5 - safetyPenalty - repetitionPenalty - durationPenalty;
         } else {
-          finalScore = greenery * 1.5 + sinuosity * 0.5 - safetyPenalty - repetition;
+          finalScore = greenery * 1.5 + sinuosity * 0.5 - safetyPenalty - repetitionPenalty - durationPenalty;
         }
         
-        // Apply duration error penalty strongly
-        finalScore -= durationError * 4.0;
-
         const rawScore = finalScore;
-        const displayScore = Math.max(0.5, finalScore + 6.0);
+        const displayScore = Math.max(0.5, Math.min(10.0, finalScore + 6.0));
         
         return { 
           waypoints: res.waypoints, 
