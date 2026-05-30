@@ -958,9 +958,9 @@ function MoodMiles() {
         {/* Footnote */}
         <footer className="mt-8 text-center pb-2 space-y-2">
           <div className="flex justify-center gap-3 text-[10px] text-muted-foreground/45">
-            <a href="https://moodmiles-production.up.railway.app/privacy" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Privacy Policy</a>
+            <a href="https://moodmiles.uk/privacy" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Privacy Policy</a>
             <span>•</span>
-            <a href="https://moodmiles-production.up.railway.app/terms" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Terms of Service</a>
+            <a href="https://moodmiles.uk/terms" className="hover:text-foreground/70 transition-colors underline underline-offset-2">Terms of Service</a>
           </div>
           <p className="text-[10px] text-muted-foreground/45 tracking-wider">
             Created by <span className="font-medium text-foreground/45">Bikram Chatterjee</span>
